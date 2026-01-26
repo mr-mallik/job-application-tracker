@@ -101,3 +101,181 @@
 #====================================================================================================
 # Testing Data - Main Agent and testing sub agent both should log testing data below this section
 #====================================================================================================
+
+user_problem_statement: |
+  Build a job application tracker with:
+  - User authentication (email/password with email verification)
+  - Job dashboard showing applied jobs, status, organization, salary, closing/applied dates
+  - URL scraping with Gemini AI to extract job details
+  - Document generation (Resume, Cover Letter, Supporting Statement) with AI refinement
+  - PDF/TXT export
+  - Rejection feedback feature
+
+backend:
+  - task: "User Registration with Email Verification"
+    implemented: true
+    working: "needs_testing"
+    file: "/app/lib/auth.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "needs_testing"
+        agent: "main"
+        comment: "Implemented registration API with verification code logged to console"
+
+  - task: "User Login"
+    implemented: true
+    working: "needs_testing"
+    file: "/app/lib/auth.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "needs_testing"
+        agent: "main"
+        comment: "Implemented JWT-based login after email verification"
+
+  - task: "Password Reset"
+    implemented: true
+    working: "needs_testing"
+    file: "/app/lib/auth.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "needs_testing"
+        agent: "main"
+        comment: "Implemented forgot password and reset with code"
+
+  - task: "Profile Update"
+    implemented: true
+    working: "needs_testing"
+    file: "/app/lib/auth.js"
+    stuck_count: 0
+    priority: "medium"
+    needs_retesting: true
+    status_history:
+      - working: "needs_testing"
+        agent: "main"
+        comment: "Implemented profile name/phone update"
+
+  - task: "Job CRUD Operations"
+    implemented: true
+    working: "needs_testing"
+    file: "/app/app/api/[[...path]]/route.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "needs_testing"
+        agent: "main"
+        comment: "Implemented GET/POST/PUT/DELETE for jobs with user ownership"
+
+  - task: "Job URL Scraping with Gemini AI"
+    implemented: true
+    working: "needs_testing"
+    file: "/app/lib/gemini.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "needs_testing"
+        agent: "main"
+        comment: "Implemented web scraping and Gemini AI extraction for job details"
+
+  - task: "Document Refinement with Gemini AI"
+    implemented: true
+    working: "needs_testing"
+    file: "/app/lib/gemini.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "needs_testing"
+        agent: "main"
+        comment: "Implemented AI document refinement for resume, cover letter, supporting statement"
+
+frontend:
+  - task: "Authentication UI"
+    implemented: true
+    working: "needs_testing"
+    file: "/app/app/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "needs_testing"
+        agent: "main"
+        comment: "Login, Register, Verify, Forgot/Reset password UI implemented"
+
+  - task: "Dashboard with Job List"
+    implemented: true
+    working: "needs_testing"
+    file: "/app/app/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "needs_testing"
+        agent: "main"
+        comment: "Dashboard with stats cards and job list implemented"
+
+  - task: "Add/Edit Job Form"
+    implemented: true
+    working: "needs_testing"
+    file: "/app/app/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "needs_testing"
+        agent: "main"
+        comment: "Job form with URL extraction feature implemented"
+
+  - task: "Document Editor with AI Refinement"
+    implemented: true
+    working: "needs_testing"
+    file: "/app/app/page.js"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: "needs_testing"
+        agent: "main"
+        comment: "Document editor for resume, cover letter, supporting statement with AI refine and export"
+
+metadata:
+  created_by: "main_agent"
+  version: "1.0"
+  test_sequence: 1
+  run_ui: false
+
+test_plan:
+  current_focus:
+    - "User Registration with Email Verification"
+    - "User Login"
+    - "Job CRUD Operations"
+    - "Document Refinement with Gemini AI"
+  stuck_tasks: []
+  test_all: false
+  test_priority: "high_first"
+
+agent_communication:
+  - agent: "main"
+    message: |
+      Implemented full Job Application Tracker MVP with:
+      1. Auth: Register with email verification (code in console), login, password reset, profile update
+      2. Jobs: CRUD operations with status tracking, URL scraping with Gemini AI
+      3. Documents: Resume, Cover Letter, Supporting Statement with AI refinement and PDF/TXT export
+      
+      Test credentials: demo@jobtracker.com / demo123 (already verified in DB)
+      
+      Key APIs to test:
+      - POST /api/auth/register (creates user, logs verification code)
+      - POST /api/auth/verify (email + code)
+      - POST /api/auth/login (returns JWT)
+      - GET /api/jobs (requires Bearer token)
+      - POST /api/jobs (create job)
+      - POST /api/jobs/scrape (extract job from URL)
+      - POST /api/documents/refine (AI refinement)

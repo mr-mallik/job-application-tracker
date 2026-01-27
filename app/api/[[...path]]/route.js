@@ -2,8 +2,8 @@ import { MongoClient } from 'mongodb'
 import { v4 as uuidv4 } from 'uuid'
 import { NextResponse } from 'next/server'
 import { createUser, verifyUserEmail, loginUser, getUserFromToken, updateUserProfile, resetPasswordRequest, resetPassword } from '@/lib/auth'
-import { fetchPageContent, extractTextContent } from '@/lib/scraper'
-import { extractJobDetailsFromHTML, refineDocument } from '@/lib/gemini'
+import { scrapeWithPlaywright, parseWithCheerio, detectJobBoard } from '@/lib/scraper'
+import { classifyJobData, refineDocument } from '@/lib/gemini'
 import { getCollection } from '@/lib/db'
 
 // MongoDB connection

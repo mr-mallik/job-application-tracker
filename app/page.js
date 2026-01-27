@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,7 +16,8 @@ import { Separator } from '@/components/ui/separator'
 import { 
   Briefcase, Plus, LogOut, User, FileText, Sparkles, ExternalLink, 
   Trash2, Edit, Calendar, Building2, MapPin, DollarSign, Clock,
-  Download, Copy, RefreshCw, X, Check, AlertCircle, Eye, FileEdit
+  Download, Copy, RefreshCw, X, Check, AlertCircle, Eye, FileEdit,
+  GraduationCap, Code, FolderOpen, Heart, Award
 } from 'lucide-react'
 
 // Status colors
@@ -31,44 +30,225 @@ const statusColors = {
   withdrawn: 'bg-purple-100 text-purple-800'
 }
 
-// PDF Preview Component with Harvard Style
-function PDFPreview({ content, maxPages = 2, documentType = 'resume' }) {
-  const previewRef = useRef(null)
+// Resume PDF Preview Component with Harvard Style - Fixed 2 page max
+function ResumePDFPreview({ content, userProfile, maxPages = 2 }) {
   const [pages, setPages] = useState([])
   const [overflow, setOverflow] = useState(false)
   
-  // Parse markdown into sections for proper page breaking
-  const parseContentIntoSections = useCallback((text) => {
-    if (!text) return []
+  // Parse markdown resume into structured sections
+  const parseResumeContent = useCallback((text, profile) => {
+    if (!text && !profile) return { header: null, sections: [] }
+    
+    // Header is always from profile
+    const header = profile ? {
+      name: profile.name || '',
+      designation: profile.designation || '',
+      email: profile.email || '',
+      phone: profile.phone || '',
+      linkedin: profile.linkedin || '',
+      portfolio: profile.portfolio || ''
+    } : null
+    
+    const sections = []
+    if (!text) return { header, sections }
     
     const lines = text.split('\n')
-    const sections = []
-    let currentSection = { title: '', content: [], isHeader: false }
+    let currentSection = null
     
     lines.forEach(line => {
-      // Check if it's a header (markdown style)
-      if (line.match(/^#{1,3}\s+/) || line.match(/^[A-Z][A-Z\s]+$/)) {
-        if (currentSection.content.length > 0 || currentSection.title) {
-          sections.push(currentSection)
+      const trimmed = line.trim()
+      if (!trimmed) return
+      
+      // Check for main section headers (# HEADING or **HEADING** or UPPERCASE HEADING)
+      if (trimmed.match(/^#\s+[A-Z]/) || trimmed.match(/^##\s+/) || 
+          (trimmed === trimmed.toUpperCase() && trimmed.length > 3 && !trimmed.startsWith('-'))) {
+        if (currentSection) sections.push(currentSection)
+        currentSection = {
+          title: trimmed.replace(/^#+\s*/, '').replace(/\*\*/g, ''),
+          items: []
         }
-        currentSection = { 
-          title: line.replace(/^#+\s*/, '').trim(), 
-          content: [], 
-          isHeader: true 
-        }
-      } else if (line.trim()) {
-        currentSection.content.push(line)
+      } else if (currentSection) {
+        currentSection.items.push(trimmed)
       }
     })
     
-    if (currentSection.content.length > 0 || currentSection.title) {
-      sections.push(currentSection)
-    }
-    
-    return sections
+    if (currentSection) sections.push(currentSection)
+    return { header, sections }
   }, [])
 
-  // Calculate pages without breaking sections
+  // Render to pages with proper sizing
+  useEffect(() => {
+    const { header, sections } = parseResumeContent(content, userProfile)
+    
+    if (!header && sections.length === 0) {
+      setPages([])
+      setOverflow(false)
+      return
+    }
+
+    // Each page can hold approximately:
+    // - Header: ~8 lines worth
+    // - Lines per page after header: ~35 lines (with smaller font)
+    const LINES_PER_PAGE = 38
+    const HEADER_LINES = 6
+    
+    const newPages = []
+    let currentPage = { header: null, sections: [] }
+    let currentLineCount = 0
+    
+    // First page always has header
+    if (header) {
+      currentPage.header = header
+      currentLineCount = HEADER_LINES
+    }
+    
+    // Distribute sections across pages
+    sections.forEach((section, idx) => {
+      // Estimate section size: title (2 lines) + items
+      const sectionLines = 2 + section.items.length
+      
+      // Check if this section should start on page 2 (Skills)
+      const isSkillsSection = section.title.toUpperCase().includes('SKILL')
+      
+      // If Skills section and we're on page 1, force new page
+      if (isSkillsSection && newPages.length === 0 && currentPage.sections.length > 0) {
+        newPages.push({ ...currentPage })
+        currentPage = { header: null, sections: [] }
+        currentLineCount = 0
+      }
+      
+      // If section doesn't fit, start new page
+      if (currentLineCount + sectionLines > LINES_PER_PAGE && currentPage.sections.length > 0) {
+        newPages.push({ ...currentPage })
+        currentPage = { header: null, sections: [] }
+        currentLineCount = 0
+      }
+      
+      currentPage.sections.push(section)
+      currentLineCount += sectionLines
+    })
+    
+    if (currentPage.sections.length > 0 || currentPage.header) {
+      newPages.push(currentPage)
+    }
+    
+    setPages(newPages)
+    setOverflow(newPages.length > maxPages)
+  }, [content, userProfile, maxPages, parseResumeContent])
+
+  if (pages.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg border-2 border-dashed">
+        <p className="text-muted-foreground">Enter content to see preview</p>
+      </div>
+    )
+  }
+
+  const renderHeader = (header) => {
+    if (!header) return null
+    return (
+      <div className="text-center mb-3 pb-2 border-b border-gray-400">
+        <h1 className="text-base font-bold uppercase tracking-wider">{header.name}</h1>
+        <p className="text-xs text-gray-600 mt-0.5">{header.designation}</p>
+        <div className="flex items-center justify-center gap-2 mt-1 text-[10px] text-blue-600 flex-wrap">
+          {header.email && <a href={`mailto:${header.email}`} className="hover:underline">{header.email}</a>}
+          {header.phone && <span>|</span>}
+          {header.phone && <a href={`tel:${header.phone}`} className="hover:underline">{header.phone}</a>}
+          {header.linkedin && <span>|</span>}
+          {header.linkedin && <a href={header.linkedin.startsWith('http') ? header.linkedin : `https://${header.linkedin}`} className="hover:underline">{header.linkedin}</a>}
+          {header.portfolio && <span>|</span>}
+          {header.portfolio && <a href={header.portfolio.startsWith('http') ? header.portfolio : `https://${header.portfolio}`} className="hover:underline">{header.portfolio}</a>}
+        </div>
+      </div>
+    )
+  }
+
+  const renderSection = (section) => {
+    const title = section.title.toUpperCase()
+    return (
+      <div className="mb-2">
+        <h2 className="text-[11px] font-bold uppercase tracking-wide border-b border-gray-300 pb-0.5 mb-1">{title}</h2>
+        <div className="text-[9px] leading-tight">
+          {section.items.map((item, idx) => {
+            // Check if it's a subheading (starts with ** or has | separators)
+            const isSubheading = item.startsWith('**') || (item.includes('|') && !item.startsWith('-'))
+            const isBullet = item.startsWith('-') || item.startsWith('•')
+            
+            if (isSubheading) {
+              return (
+                <p key={idx} className="font-semibold mt-1 text-[10px]">
+                  {item.replace(/\*\*/g, '')}
+                </p>
+              )
+            } else if (isBullet) {
+              return (
+                <p key={idx} className="ml-2 text-gray-700">
+                  • {item.replace(/^[-•]\s*/, '')}
+                </p>
+              )
+            } else {
+              return (
+                <p key={idx} className="text-gray-700">{item}</p>
+              )
+            }
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      {overflow && (
+        <div className="p-2 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+          <span className="text-xs text-red-700">
+            Content exceeds {maxPages} pages ({pages.length} pages). Please reduce content.
+          </span>
+        </div>
+      )}
+      
+      <div className="flex gap-2 text-xs text-muted-foreground">
+        <span>Pages: {pages.length}/{maxPages}</span>
+        {!overflow && <Check className="w-4 h-4 text-green-600" />}
+      </div>
+      
+      <div className="space-y-3 max-h-[550px] overflow-y-auto">
+        {pages.map((page, pageIndex) => (
+          <div 
+            key={pageIndex} 
+            className={`bg-white border rounded-lg shadow-sm p-4 ${
+              pageIndex >= maxPages ? 'border-red-300 bg-red-50' : ''
+            }`}
+            style={{ 
+              fontFamily: 'Georgia, serif',
+              minHeight: '280px',
+              fontSize: '9px'
+            }}
+          >
+            <div className="text-[8px] text-muted-foreground mb-2 text-right">
+              Page {pageIndex + 1} of {pages.length}
+            </div>
+            
+            {page.header && renderHeader(page.header)}
+            
+            {page.sections.map((section, sectionIndex) => (
+              <div key={sectionIndex}>
+                {renderSection(section)}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Generic PDF Preview for Cover Letter and Supporting Statement
+function DocumentPDFPreview({ content, maxPages = 2, documentType = 'coverLetter' }) {
+  const [pages, setPages] = useState([])
+  const [overflow, setOverflow] = useState(false)
+  
   useEffect(() => {
     if (!content) {
       setPages([])
@@ -76,33 +256,27 @@ function PDFPreview({ content, maxPages = 2, documentType = 'resume' }) {
       return
     }
 
-    const sections = parseContentIntoSections(content)
-    const linesPerPage = documentType === 'supportingStatement' ? 45 : 40
+    const lines = content.split('\n').filter(l => l.trim())
+    const LINES_PER_PAGE = documentType === 'supportingStatement' ? 45 : 40
+    
     const newPages = []
     let currentPage = []
-    let currentLineCount = 0
-
-    sections.forEach(section => {
-      const sectionLines = (section.title ? 2 : 0) + section.content.length + 1
-      
-      // If adding this section would overflow, start a new page
-      if (currentLineCount + sectionLines > linesPerPage && currentPage.length > 0) {
+    
+    lines.forEach(line => {
+      currentPage.push(line)
+      if (currentPage.length >= LINES_PER_PAGE) {
         newPages.push([...currentPage])
         currentPage = []
-        currentLineCount = 0
       }
-      
-      currentPage.push(section)
-      currentLineCount += sectionLines
     })
-
+    
     if (currentPage.length > 0) {
       newPages.push(currentPage)
     }
-
+    
     setPages(newPages)
     setOverflow(newPages.length > maxPages)
-  }, [content, maxPages, documentType, parseContentIntoSections])
+  }, [content, maxPages, documentType])
 
   if (!content) {
     return (
@@ -113,59 +287,40 @@ function PDFPreview({ content, maxPages = 2, documentType = 'resume' }) {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {overflow && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-red-600" />
-          <span className="text-sm text-red-700">
-            Content exceeds {maxPages} pages ({pages.length} pages). Please reduce content.
+        <div className="p-2 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+          <span className="text-xs text-red-700">
+            Content exceeds {maxPages} pages ({pages.length} pages).
           </span>
         </div>
       )}
       
-      <div className="flex gap-2 text-sm text-muted-foreground mb-2">
+      <div className="flex gap-2 text-xs text-muted-foreground">
         <span>Pages: {pages.length}/{maxPages}</span>
         {!overflow && <Check className="w-4 h-4 text-green-600" />}
       </div>
       
-      <div ref={previewRef} className="space-y-4 max-h-[600px] overflow-y-auto">
-        {pages.map((pageSections, pageIndex) => (
+      <div className="space-y-3 max-h-[550px] overflow-y-auto">
+        {pages.map((pageLines, pageIndex) => (
           <div 
             key={pageIndex} 
-            className={`bg-white border rounded-lg shadow-sm p-8 min-h-[500px] ${
+            className={`bg-white border rounded-lg shadow-sm p-4 ${
               pageIndex >= maxPages ? 'border-red-300 bg-red-50' : ''
             }`}
-            style={{ fontFamily: 'Georgia, serif' }}
+            style={{ fontFamily: 'Georgia, serif', minHeight: '280px' }}
           >
-            <div className="text-xs text-muted-foreground mb-4 text-right">
+            <div className="text-[8px] text-muted-foreground mb-2 text-right">
               Page {pageIndex + 1} of {pages.length}
             </div>
-            
-            {pageSections.map((section, sectionIndex) => (
-              <div key={sectionIndex} className="mb-4">
-                {section.title && (
-                  <h3 className="text-lg font-bold text-gray-900 border-b border-gray-300 pb-1 mb-2 uppercase tracking-wide">
-                    {section.title}
-                  </h3>
-                )}
-                {section.content.map((line, lineIndex) => (
-                  <div key={lineIndex} className="text-sm text-gray-700 leading-relaxed">
-                    <ReactMarkdown 
-                      remarkPlugins={[remarkGfm]}
-                      components={{
-                        p: ({children}) => <p className="mb-1">{children}</p>,
-                        ul: ({children}) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
-                        li: ({children}) => <li className="mb-0.5">{children}</li>,
-                        strong: ({children}) => <strong className="font-semibold">{children}</strong>,
-                        a: ({children, href}) => <a href={href} className="text-blue-600 underline">{children}</a>
-                      }}
-                    >
-                      {line}
-                    </ReactMarkdown>
-                  </div>
-                ))}
-              </div>
-            ))}
+            <div className="text-[10px] leading-relaxed space-y-1">
+              {pageLines.map((line, lineIndex) => (
+                <p key={lineIndex} className={line.startsWith('#') ? 'font-bold text-[11px] mt-2' : ''}>
+                  {line.replace(/^#+\s*/, '')}
+                </p>
+              ))}
+            </div>
           </div>
         ))}
       </div>
@@ -316,40 +471,30 @@ function AuthPage({ onLogin }) {
               <Button type="submit" className="w-full" disabled={loading}>
                 {loading ? 'Verifying...' : 'Verify Email'}
               </Button>
-              <Button type="button" variant="ghost" className="w-full" onClick={() => setIsVerifying(false)}>
-                Back
-              </Button>
+              <Button type="button" variant="ghost" className="w-full" onClick={() => setIsVerifying(false)}>Back</Button>
             </form>
           ) : isForgotPassword ? (
             isResetting ? (
               <form onSubmit={handleResetPassword} className="space-y-4">
                 <div className="space-y-2">
                   <Label>Reset Code</Label>
-                  <Input placeholder="Enter code from console" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} required />
+                  <Input placeholder="Enter code" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} required />
                 </div>
                 <div className="space-y-2">
                   <Label>New Password</Label>
-                  <Input type="password" placeholder="••••••••" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
+                  <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Resetting...' : 'Reset Password'}
-                </Button>
-                <Button type="button" variant="ghost" className="w-full" onClick={() => { setIsForgotPassword(false); setIsResetting(false); }}>
-                  Back to Login
-                </Button>
+                <Button type="submit" className="w-full" disabled={loading}>{loading ? 'Resetting...' : 'Reset Password'}</Button>
+                <Button type="button" variant="ghost" className="w-full" onClick={() => { setIsForgotPassword(false); setIsResetting(false); }}>Back</Button>
               </form>
             ) : (
               <form onSubmit={handleForgotPassword} className="space-y-4">
                 <div className="space-y-2">
                   <Label>Email</Label>
-                  <Input type="email" placeholder="you@example.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+                  <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Sending...' : 'Send Reset Code'}
-                </Button>
-                <Button type="button" variant="ghost" className="w-full" onClick={() => setIsForgotPassword(false)}>
-                  Back to Login
-                </Button>
+                <Button type="submit" className="w-full" disabled={loading}>{loading ? 'Sending...' : 'Send Reset Code'}</Button>
+                <Button type="button" variant="ghost" className="w-full" onClick={() => setIsForgotPassword(false)}>Back</Button>
               </form>
             )
           ) : isLogin ? (
@@ -360,18 +505,12 @@ function AuthPage({ onLogin }) {
               </div>
               <div className="space-y-2">
                 <Label>Password</Label>
-                <Input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Signing in...' : 'Sign In'}
-              </Button>
+              <Button type="submit" className="w-full" disabled={loading}>{loading ? 'Signing in...' : 'Sign In'}</Button>
               <div className="flex justify-between text-sm">
-                <button type="button" className="text-primary hover:underline" onClick={() => setIsForgotPassword(true)}>
-                  Forgot password?
-                </button>
-                <button type="button" className="text-primary hover:underline" onClick={() => setIsLogin(false)}>
-                  Create account
-                </button>
+                <button type="button" className="text-primary hover:underline" onClick={() => setIsForgotPassword(true)}>Forgot password?</button>
+                <button type="button" className="text-primary hover:underline" onClick={() => setIsLogin(false)}>Create account</button>
               </div>
             </form>
           ) : (
@@ -386,14 +525,10 @@ function AuthPage({ onLogin }) {
               </div>
               <div className="space-y-2">
                 <Label>Password</Label>
-                <Input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? 'Creating account...' : 'Create Account'}
-              </Button>
-              <Button type="button" variant="ghost" className="w-full" onClick={() => setIsLogin(true)}>
-                Already have an account? Sign in
-              </Button>
+              <Button type="submit" className="w-full" disabled={loading}>{loading ? 'Creating...' : 'Create Account'}</Button>
+              <Button type="button" variant="ghost" className="w-full" onClick={() => setIsLogin(true)}>Already have an account?</Button>
             </form>
           )}
         </CardContent>
@@ -402,8 +537,323 @@ function AuthPage({ onLogin }) {
   )
 }
 
+// Experience Entry Component
+function ExperienceEntry({ experience, index, onChange, onRemove }) {
+  return (
+    <Card className="mb-3">
+      <CardContent className="pt-4 space-y-3">
+        <div className="flex justify-between items-start">
+          <span className="text-sm font-medium">Experience #{index + 1}</span>
+          <Button variant="ghost" size="sm" onClick={onRemove}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Input placeholder="Job Title" value={experience.title || ''} onChange={(e) => onChange({ ...experience, title: e.target.value })} />
+          <Input placeholder="Company" value={experience.company || ''} onChange={(e) => onChange({ ...experience, company: e.target.value })} />
+          <Input placeholder="Location" value={experience.location || ''} onChange={(e) => onChange({ ...experience, location: e.target.value })} />
+          <div className="flex gap-2">
+            <Input placeholder="Start (mm/yyyy)" value={experience.startDate || ''} onChange={(e) => onChange({ ...experience, startDate: e.target.value })} />
+            <Input placeholder="End (mm/yyyy)" value={experience.endDate || ''} onChange={(e) => onChange({ ...experience, endDate: e.target.value })} />
+          </div>
+        </div>
+        <Textarea placeholder="Description (bullet points, one per line)" className="min-h-[80px]" value={experience.description || ''} onChange={(e) => onChange({ ...experience, description: e.target.value })} />
+      </CardContent>
+    </Card>
+  )
+}
+
+// Project Entry Component
+function ProjectEntry({ project, index, onChange, onRemove }) {
+  return (
+    <Card className="mb-3">
+      <CardContent className="pt-4 space-y-3">
+        <div className="flex justify-between items-start">
+          <span className="text-sm font-medium">Project #{index + 1}</span>
+          <Button variant="ghost" size="sm" onClick={onRemove}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <Input placeholder="Project Title" value={project.title || ''} onChange={(e) => onChange({ ...project, title: e.target.value })} />
+          <Input placeholder="URL (optional)" value={project.url || ''} onChange={(e) => onChange({ ...project, url: e.target.value })} />
+        </div>
+        <Textarea placeholder="Description (tech stack, problem solved, impact)" className="min-h-[60px]" value={project.description || ''} onChange={(e) => onChange({ ...project, description: e.target.value })} />
+      </CardContent>
+    </Card>
+  )
+}
+
+// Profile Editor Component with all resume details
+function ProfileEditor({ user, token, onSave, onCancel }) {
+  const [profileData, setProfileData] = useState({
+    name: user.name || '',
+    designation: user.designation || '',
+    email: user.email || '',
+    phone: user.phone || '',
+    linkedin: user.linkedin || '',
+    portfolio: user.portfolio || '',
+    summary: user.summary || '',
+    experiences: user.experiences || [],
+    education: user.education || { degree: '', institution: '', location: '', grade: '', startDate: '', endDate: '' },
+    skills: user.skills || { relevant: '', other: '' },
+    projects: user.projects || [],
+    interests: user.interests || [],
+    achievements: user.achievements || ''
+  })
+  const [saving, setSaving] = useState(false)
+  const [activeTab, setActiveTab] = useState('basic')
+
+  const addExperience = () => {
+    setProfileData(prev => ({
+      ...prev,
+      experiences: [...prev.experiences, { title: '', company: '', location: '', startDate: '', endDate: '', description: '' }]
+    }))
+  }
+
+  const updateExperience = (index, data) => {
+    setProfileData(prev => ({
+      ...prev,
+      experiences: prev.experiences.map((exp, i) => i === index ? data : exp)
+    }))
+  }
+
+  const removeExperience = (index) => {
+    setProfileData(prev => ({
+      ...prev,
+      experiences: prev.experiences.filter((_, i) => i !== index)
+    }))
+  }
+
+  const addProject = () => {
+    setProfileData(prev => ({
+      ...prev,
+      projects: [...prev.projects, { title: '', url: '', description: '' }]
+    }))
+  }
+
+  const updateProject = (index, data) => {
+    setProfileData(prev => ({
+      ...prev,
+      projects: prev.projects.map((proj, i) => i === index ? data : proj)
+    }))
+  }
+
+  const removeProject = (index) => {
+    setProfileData(prev => ({
+      ...prev,
+      projects: prev.projects.filter((_, i) => i !== index)
+    }))
+  }
+
+  const addInterest = () => {
+    setProfileData(prev => ({
+      ...prev,
+      interests: [...prev.interests, { title: '', description: '' }]
+    }))
+  }
+
+  const handleSave = async () => {
+    setSaving(true)
+    try {
+      const res = await fetch('/api/auth/profile', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(profileData)
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      toast.success('Profile saved!')
+      onSave(data.user)
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Generate preview content from profile data
+  const generatePreviewContent = () => {
+    let content = ''
+    
+    if (profileData.summary) {
+      content += `# SUMMARY\n${profileData.summary}\n\n`
+    }
+    
+    if (profileData.experiences.length > 0) {
+      content += `# RELEVANT WORK EXPERIENCE\n`
+      profileData.experiences.forEach(exp => {
+        content += `**${exp.title} | ${exp.company}, ${exp.location} | ${exp.startDate} - ${exp.endDate}**\n`
+        if (exp.description) {
+          exp.description.split('\n').forEach(line => {
+            if (line.trim()) content += `- ${line.trim()}\n`
+          })
+        }
+        content += '\n'
+      })
+    }
+    
+    if (profileData.education.degree) {
+      content += `# EDUCATION\n`
+      content += `**${profileData.education.degree} | ${profileData.education.grade} | ${profileData.education.startDate} - ${profileData.education.endDate}**\n`
+      content += `${profileData.education.institution}, ${profileData.education.location}\n\n`
+    }
+    
+    if (profileData.skills.relevant || profileData.skills.other) {
+      content += `# SKILLS\n`
+      if (profileData.skills.relevant) {
+        content += `**Relevant Skills**\n${profileData.skills.relevant}\n\n`
+      }
+      if (profileData.skills.other) {
+        content += `**Other Skills**\n${profileData.skills.other}\n\n`
+      }
+    }
+    
+    if (profileData.projects.length > 0) {
+      content += `# PROJECTS\n`
+      profileData.projects.forEach(proj => {
+        content += `**${proj.title}${proj.url ? ' | ' + proj.url : ''}**\n`
+        content += `${proj.description}\n\n`
+      })
+    }
+    
+    if (profileData.interests.length > 0) {
+      content += `# INTERESTS\n`
+      profileData.interests.forEach(int => {
+        content += `**${int.title}**\n${int.description}\n\n`
+      })
+    }
+    
+    return content
+  }
+
+  return (
+    <div className="grid grid-cols-2 gap-4 h-[70vh]">
+      <div className="overflow-y-auto pr-2">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="grid grid-cols-5 mb-4">
+            <TabsTrigger value="basic"><User className="w-4 h-4" /></TabsTrigger>
+            <TabsTrigger value="experience"><Briefcase className="w-4 h-4" /></TabsTrigger>
+            <TabsTrigger value="education"><GraduationCap className="w-4 h-4" /></TabsTrigger>
+            <TabsTrigger value="skills"><Code className="w-4 h-4" /></TabsTrigger>
+            <TabsTrigger value="projects"><FolderOpen className="w-4 h-4" /></TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="basic" className="space-y-3">
+            <h3 className="font-semibold">Basic Information (Header)</h3>
+            <Input placeholder="Full Name" value={profileData.name} onChange={(e) => setProfileData({...profileData, name: e.target.value})} />
+            <Input placeholder="Designation/Title" value={profileData.designation} onChange={(e) => setProfileData({...profileData, designation: e.target.value})} />
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="Phone" value={profileData.phone} onChange={(e) => setProfileData({...profileData, phone: e.target.value})} />
+              <Input placeholder="Email" value={profileData.email} disabled />
+            </div>
+            <Input placeholder="LinkedIn URL" value={profileData.linkedin} onChange={(e) => setProfileData({...profileData, linkedin: e.target.value})} />
+            <Input placeholder="Portfolio URL" value={profileData.portfolio} onChange={(e) => setProfileData({...profileData, portfolio: e.target.value})} />
+            <div>
+              <Label>Professional Summary</Label>
+              <Textarea placeholder="Your professional summary..." className="min-h-[100px]" value={profileData.summary} onChange={(e) => setProfileData({...profileData, summary: e.target.value})} />
+            </div>
+          </TabsContent>
+          
+          <TabsContent value="experience" className="space-y-3">
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold">Work Experience</h3>
+              <Button size="sm" onClick={addExperience}><Plus className="w-4 h-4 mr-1" /> Add</Button>
+            </div>
+            {profileData.experiences.map((exp, i) => (
+              <ExperienceEntry key={i} experience={exp} index={i} onChange={(data) => updateExperience(i, data)} onRemove={() => removeExperience(i)} />
+            ))}
+            {profileData.experiences.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No experience added yet</p>
+            )}
+          </TabsContent>
+          
+          <TabsContent value="education" className="space-y-3">
+            <h3 className="font-semibold">Education</h3>
+            <Input placeholder="Degree Name" value={profileData.education.degree} onChange={(e) => setProfileData({...profileData, education: {...profileData.education, degree: e.target.value}})} />
+            <Input placeholder="Institution" value={profileData.education.institution} onChange={(e) => setProfileData({...profileData, education: {...profileData.education, institution: e.target.value}})} />
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="Location" value={profileData.education.location} onChange={(e) => setProfileData({...profileData, education: {...profileData.education, location: e.target.value}})} />
+              <Input placeholder="Grade/GPA" value={profileData.education.grade} onChange={(e) => setProfileData({...profileData, education: {...profileData.education, grade: e.target.value}})} />
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="Start Date (mm/yyyy)" value={profileData.education.startDate} onChange={(e) => setProfileData({...profileData, education: {...profileData.education, startDate: e.target.value}})} />
+              <Input placeholder="End Date (mm/yyyy)" value={profileData.education.endDate} onChange={(e) => setProfileData({...profileData, education: {...profileData.education, endDate: e.target.value}})} />
+            </div>
+            
+            <Separator className="my-4" />
+            <h3 className="font-semibold">Achievements</h3>
+            <Textarea placeholder="Notable achievements, awards, certifications..." className="min-h-[100px]" value={profileData.achievements} onChange={(e) => setProfileData({...profileData, achievements: e.target.value})} />
+          </TabsContent>
+          
+          <TabsContent value="skills" className="space-y-3">
+            <h3 className="font-semibold">Skills</h3>
+            <div>
+              <Label>All Skills (comma separated)</Label>
+              <Textarea placeholder="Python, JavaScript, React, Node.js, AWS, Docker..." className="min-h-[80px]" value={profileData.skills.relevant} onChange={(e) => setProfileData({...profileData, skills: {...profileData.skills, relevant: e.target.value}})} />
+              <p className="text-xs text-muted-foreground mt-1">AI will select the most relevant skills for each job</p>
+            </div>
+            <div>
+              <Label>Secondary/Soft Skills</Label>
+              <Textarea placeholder="Project Management, Communication, Leadership..." className="min-h-[80px]" value={profileData.skills.other} onChange={(e) => setProfileData({...profileData, skills: {...profileData.skills, other: e.target.value}})} />
+            </div>
+            
+            <Separator className="my-4" />
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold">Interests</h3>
+              <Button size="sm" onClick={addInterest}><Plus className="w-4 h-4 mr-1" /> Add</Button>
+            </div>
+            {profileData.interests.map((interest, i) => (
+              <Card key={i} className="mb-2">
+                <CardContent className="pt-3 space-y-2">
+                  <div className="flex justify-between">
+                    <Input placeholder="Interest Title" className="flex-1 mr-2" value={interest.title} onChange={(e) => {
+                      const newInterests = [...profileData.interests]
+                      newInterests[i] = { ...interest, title: e.target.value }
+                      setProfileData({...profileData, interests: newInterests})
+                    }} />
+                    <Button variant="ghost" size="sm" onClick={() => setProfileData({...profileData, interests: profileData.interests.filter((_, idx) => idx !== i)})}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+                  </div>
+                  <Input placeholder="Short description" value={interest.description} onChange={(e) => {
+                    const newInterests = [...profileData.interests]
+                    newInterests[i] = { ...interest, description: e.target.value }
+                    setProfileData({...profileData, interests: newInterests})
+                  }} />
+                </CardContent>
+              </Card>
+            ))}
+          </TabsContent>
+          
+          <TabsContent value="projects" className="space-y-3">
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold">Projects</h3>
+              <Button size="sm" onClick={addProject}><Plus className="w-4 h-4 mr-1" /> Add</Button>
+            </div>
+            {profileData.projects.map((proj, i) => (
+              <ProjectEntry key={i} project={proj} index={i} onChange={(data) => updateProject(i, data)} onRemove={() => removeProject(i)} />
+            ))}
+            {profileData.projects.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center py-4">No projects added yet</p>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+      
+      <div className="border-l pl-4">
+        <Label className="flex items-center gap-2 mb-2"><Eye className="w-4 h-4" /> Resume Preview</Label>
+        <ResumePDFPreview 
+          content={generatePreviewContent()} 
+          userProfile={profileData}
+          maxPages={2} 
+        />
+      </div>
+      
+      <div className="col-span-2 flex justify-end gap-2 pt-2 border-t">
+        <Button variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</Button>
+      </div>
+    </div>
+  )
+}
+
 // Job Form Component
-function JobForm({ job, onSave, onCancel, token, baseResume }) {
+function JobForm({ job, onSave, onCancel, token, userProfile }) {
   const [loading, setLoading] = useState(false)
   const [scraping, setScraping] = useState(false)
   const [formData, setFormData] = useState({
@@ -447,9 +897,9 @@ function JobForm({ job, onSave, onCancel, token, baseResume }) {
         requirements: data.jobDetails.requirements || prev.requirements,
         benefits: data.jobDetails.benefits || prev.benefits
       }))
-      toast.success('Job details extracted successfully!')
+      toast.success('Job details extracted!')
     } catch (error) {
-      toast.error('Failed to extract job details: ' + error.message)
+      toast.error(error.message)
     } finally {
       setScraping(false)
     }
@@ -462,16 +912,10 @@ function JobForm({ job, onSave, onCancel, token, baseResume }) {
       const url = job ? `/api/jobs/${job.id}` : '/api/jobs'
       const method = job ? 'PUT' : 'POST'
       
-      // For new jobs, include base resume
-      const submitData = { ...formData }
-      if (!job && baseResume) {
-        submitData.resume = { content: baseResume, refinedContent: '' }
-      }
-      
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(submitData)
+        body: JSON.stringify(formData)
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -549,33 +993,30 @@ function JobForm({ job, onSave, onCancel, token, baseResume }) {
       
       <div>
         <Label>Job Description</Label>
-        <Textarea placeholder="Job description..." className="min-h-[100px]" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
+        <Textarea placeholder="Job description..." className="min-h-[80px]" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} />
       </div>
       
       <div>
         <Label>Requirements</Label>
-        <Textarea placeholder="Requirements..." className="min-h-[80px]" value={formData.requirements} onChange={(e) => setFormData({...formData, requirements: e.target.value})} />
-      </div>
-      
-      <div>
-        <Label>Notes</Label>
-        <Textarea placeholder="Your notes..." value={formData.notes} onChange={(e) => setFormData({...formData, notes: e.target.value})} />
+        <Textarea placeholder="Requirements..." className="min-h-[60px]" value={formData.requirements} onChange={(e) => setFormData({...formData, requirements: e.target.value})} />
       </div>
       
       <div className="flex gap-2 justify-end">
         <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button type="submit" disabled={loading}>
-          {loading ? 'Saving...' : (job ? 'Update Job' : 'Add Job')}
-        </Button>
+        <Button type="submit" disabled={loading}>{loading ? 'Saving...' : (job ? 'Update' : 'Add Job')}</Button>
       </div>
     </form>
   )
 }
 
-// Enhanced Document Editor with Live PDF Preview
-function DocumentEditor({ job, documentType, token, onUpdate }) {
-  const docLabels = { resume: 'Resume', coverLetter: 'Cover Letter', supportingStatement: 'Supporting Statement' }
-  const maxPages = { resume: 2, coverLetter: 2, supportingStatement: 3 }
+// Document Editor with PDF Preview
+function DocumentEditor({ job, documentType, token, onUpdate, userProfile }) {
+  const docConfig = {
+    resume: { label: 'Resume', maxPages: 2 },
+    coverLetter: { label: 'Cover Letter', maxPages: 2 },
+    supportingStatement: { label: 'Supporting Statement', maxPages: 3 }
+  }
+  const config = docConfig[documentType]
   
   const [content, setContent] = useState(job[documentType]?.content || '')
   const [refinedContent, setRefinedContent] = useState(job[documentType]?.refinedContent || '')
@@ -584,11 +1025,10 @@ function DocumentEditor({ job, documentType, token, onUpdate }) {
   const [saving, setSaving] = useState(false)
   const [showRefined, setShowRefined] = useState(false)
 
-  // Use refined content for preview if available, otherwise use original
   const previewContent = showRefined && refinedContent ? refinedContent : content
 
   const handleRefine = async () => {
-    if (!content) {
+    if (!content && documentType !== 'resume') {
       toast.error('Please enter some content first')
       return
     }
@@ -604,9 +1044,10 @@ function DocumentEditor({ job, documentType, token, onUpdate }) {
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           documentType,
-          content,
+          content: documentType === 'resume' ? JSON.stringify(userProfile) : content,
           jobDescription: job.description + '\n\nRequirements:\n' + job.requirements,
-          userPreferences: preferences
+          userPreferences: preferences,
+          userProfile: documentType === 'resume' ? userProfile : null
         })
       })
       const data = await res.json()
@@ -614,9 +1055,9 @@ function DocumentEditor({ job, documentType, token, onUpdate }) {
       
       setRefinedContent(data.refinedContent)
       setShowRefined(true)
-      toast.success('Document refined successfully!')
+      toast.success('Document refined!')
     } catch (error) {
-      toast.error('Failed to refine document: ' + error.message)
+      toast.error(error.message)
     } finally {
       setRefining(false)
     }
@@ -628,31 +1069,17 @@ function DocumentEditor({ job, documentType, token, onUpdate }) {
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({
-          [documentType]: { content, refinedContent }
-        })
+        body: JSON.stringify({ [documentType]: { content, refinedContent } })
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      
-      toast.success('Document saved!')
+      toast.success('Saved!')
       onUpdate(data.job)
     } catch (error) {
-      toast.error('Failed to save: ' + error.message)
+      toast.error(error.message)
     } finally {
       setSaving(false)
     }
-  }
-
-  const downloadTxt = () => {
-    const text = showRefined && refinedContent ? refinedContent : content
-    const blob = new Blob([text], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${job.company}-${docLabels[documentType]}.txt`
-    a.click()
-    URL.revokeObjectURL(url)
   }
 
   const downloadPdf = async () => {
@@ -660,204 +1087,92 @@ function DocumentEditor({ job, documentType, token, onUpdate }) {
     const doc = new jsPDF()
     const text = showRefined && refinedContent ? refinedContent : content
     
-    // Parse sections for proper page breaking
-    const lines = text.split('\n')
-    const margin = 20
-    const pageWidth = doc.internal.pageSize.getWidth()
-    const pageHeight = doc.internal.pageSize.getHeight()
-    const maxWidth = pageWidth - 2 * margin
-    const maxY = pageHeight - margin
-    
-    let y = margin
-    let currentSection = []
-    
-    const flushSection = () => {
-      if (currentSection.length === 0) return
-      
-      // Calculate section height
-      let sectionHeight = 0
-      currentSection.forEach(item => {
-        const splitLines = doc.splitTextToSize(item.text, maxWidth)
-        sectionHeight += splitLines.length * item.lineHeight
-      })
-      
-      // Check if section fits on current page
-      if (y + sectionHeight > maxY && y > margin) {
-        doc.addPage()
-        y = margin
-      }
-      
-      // Render section
-      currentSection.forEach(item => {
-        if (item.isHeader) {
-          doc.setFontSize(14)
-          doc.setFont('helvetica', 'bold')
-        } else {
-          doc.setFontSize(11)
-          doc.setFont('helvetica', 'normal')
-        }
-        
-        const splitLines = doc.splitTextToSize(item.text, maxWidth)
-        splitLines.forEach(line => {
-          if (y + item.lineHeight > maxY) {
-            doc.addPage()
-            y = margin
-          }
-          doc.text(line, margin, y)
-          y += item.lineHeight
-        })
-      })
-      
-      currentSection = []
-    }
+    doc.setFontSize(10)
+    const lines = doc.splitTextToSize(text, 170)
+    let y = 15
     
     lines.forEach(line => {
-      const trimmedLine = line.trim()
-      if (!trimmedLine) {
-        flushSection()
-        y += 3
-        return
-      }
-      
-      // Check if it's a header
-      const isHeader = trimmedLine.match(/^#{1,3}\s+/) || 
-                       (trimmedLine === trimmedLine.toUpperCase() && trimmedLine.length > 3)
-      
-      if (isHeader && currentSection.length > 0) {
-        flushSection()
-      }
-      
-      currentSection.push({
-        text: trimmedLine.replace(/^#+\s*/, ''),
-        isHeader,
-        lineHeight: isHeader ? 8 : 6
-      })
+      if (y > 280) { doc.addPage(); y = 15 }
+      doc.text(line, 20, y)
+      y += 5
     })
     
-    flushSection()
-    
-    doc.save(`${job.company}-${docLabels[documentType]}.pdf`)
-  }
-
-  const copyToClipboard = () => {
-    const text = showRefined && refinedContent ? refinedContent : content
-    navigator.clipboard.writeText(text)
-    toast.success('Copied to clipboard!')
+    doc.save(`${job.company}-${config.label}.pdf`)
   }
 
   const useRefinedContent = () => {
     setContent(refinedContent)
     setRefinedContent('')
     setShowRefined(false)
-    toast.success('Refined content applied to editor')
+    toast.success('Applied refined content')
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header with actions */}
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <h3 className="font-semibold">{docLabels[documentType]}</h3>
-          <Badge variant="outline">Max {maxPages[documentType]} A4 pages</Badge>
+          <h3 className="font-semibold">{config.label}</h3>
+          <Badge variant="outline">Max {config.maxPages} pages</Badge>
         </div>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={downloadTxt}>
-            <Download className="w-4 h-4 mr-1" /> TXT
-          </Button>
-          <Button size="sm" variant="outline" onClick={downloadPdf}>
-            <Download className="w-4 h-4 mr-1" /> PDF
-          </Button>
-          <Button size="sm" variant="outline" onClick={copyToClipboard}>
-            <Copy className="w-4 h-4 mr-1" /> Copy
-          </Button>
+          <Button size="sm" variant="outline" onClick={() => navigator.clipboard.writeText(previewContent).then(() => toast.success('Copied!'))}><Copy className="w-4 h-4" /></Button>
+          <Button size="sm" variant="outline" onClick={downloadPdf}><Download className="w-4 h-4" /></Button>
         </div>
       </div>
       
-      {/* AI Preferences */}
       <div className="flex gap-2 items-end">
         <div className="flex-1">
-          <Label className="text-sm">AI Instructions (optional)</Label>
-          <Input 
-            placeholder="e.g., Focus on leadership experience, highlight Python skills..."
-            value={preferences}
-            onChange={(e) => setPreferences(e.target.value)}
-          />
+          <Label className="text-xs">AI Instructions (optional)</Label>
+          <Input placeholder="e.g., Focus on Python skills..." value={preferences} onChange={(e) => setPreferences(e.target.value)} />
         </div>
         <Button onClick={handleRefine} disabled={refining} className="bg-purple-600 hover:bg-purple-700">
-          {refining ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
+          {refining ? <RefreshCw className="w-4 h-4 mr-1 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1" />}
           {refining ? 'Refining...' : 'Refine with AI'}
         </Button>
       </div>
       
-      {/* Editor and Preview side by side */}
-      <div className="grid grid-cols-2 gap-4">
-        {/* Left: Editor */}
+      <div className="grid grid-cols-2 gap-3">
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label className="flex items-center gap-2">
-              <FileEdit className="w-4 h-4" /> Markdown Editor
-            </Label>
+            <Label className="text-xs"><FileEdit className="w-3 h-3 inline mr-1" />Editor</Label>
             {refinedContent && (
-              <div className="flex items-center gap-2">
-                <Button size="sm" variant={!showRefined ? "default" : "outline"} onClick={() => setShowRefined(false)}>
-                  Original
-                </Button>
-                <Button size="sm" variant={showRefined ? "default" : "outline"} onClick={() => setShowRefined(true)}>
-                  Refined
-                </Button>
+              <div className="flex gap-1">
+                <Button size="sm" variant={!showRefined ? "default" : "ghost"} className="h-6 text-xs" onClick={() => setShowRefined(false)}>Original</Button>
+                <Button size="sm" variant={showRefined ? "default" : "ghost"} className="h-6 text-xs" onClick={() => setShowRefined(true)}>Refined</Button>
               </div>
             )}
           </div>
-          
           {showRefined && refinedContent ? (
             <div className="space-y-2">
-              <Textarea 
-                placeholder="AI refined content..."
-                className="min-h-[400px] font-mono text-sm bg-purple-50"
-                value={refinedContent}
-                onChange={(e) => setRefinedContent(e.target.value)}
-              />
-              <Button size="sm" variant="outline" onClick={useRefinedContent}>
-                <Check className="w-4 h-4 mr-1" /> Apply to Original
-              </Button>
+              <Textarea className="min-h-[350px] font-mono text-xs bg-purple-50" value={refinedContent} onChange={(e) => setRefinedContent(e.target.value)} />
+              <Button size="sm" variant="outline" onClick={useRefinedContent}><Check className="w-3 h-3 mr-1" />Apply</Button>
             </div>
           ) : (
-            <Textarea 
-              placeholder={`Enter your ${docLabels[documentType].toLowerCase()} in Markdown format...\n\n# CONTACT\nJohn Doe | john@email.com | +44 123 456 7890\n\n# SUMMARY\nExperienced software developer...\n\n# EXPERIENCE\n**Senior Developer** - Tech Corp (2020-Present)\n- Led team of 5 developers\n- Implemented CI/CD pipeline`}
-              className="min-h-[400px] font-mono text-sm"
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-            />
+            <Textarea placeholder={documentType === 'resume' ? 'AI will generate from your profile data...' : `Enter ${config.label.toLowerCase()}...`} className="min-h-[350px] font-mono text-xs" value={content} onChange={(e) => setContent(e.target.value)} />
           )}
         </div>
         
-        {/* Right: PDF Preview */}
         <div className="space-y-2">
-          <Label className="flex items-center gap-2">
-            <Eye className="w-4 h-4" /> PDF Preview (Harvard Style)
-          </Label>
-          <div className="border rounded-lg p-2 bg-gray-100 h-[420px] overflow-hidden">
-            <PDFPreview 
-              content={previewContent} 
-              maxPages={maxPages[documentType]}
-              documentType={documentType}
-            />
+          <Label className="text-xs"><Eye className="w-3 h-3 inline mr-1" />PDF Preview</Label>
+          <div className="border rounded-lg p-2 bg-gray-50 h-[360px] overflow-hidden">
+            {documentType === 'resume' ? (
+              <ResumePDFPreview content={previewContent} userProfile={userProfile} maxPages={config.maxPages} />
+            ) : (
+              <DocumentPDFPreview content={previewContent} maxPages={config.maxPages} documentType={documentType} />
+            )}
           </div>
         </div>
       </div>
       
-      {/* Save button */}
-      <div className="flex gap-2 justify-end">
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? 'Saving...' : 'Save Document'}
-        </Button>
+      <div className="flex justify-end">
+        <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
       </div>
     </div>
   )
 }
 
 // Job Details Panel
-function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete }) {
+function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userProfile }) {
   const [activeTab, setActiveTab] = useState('details')
   const [editing, setEditing] = useState(false)
   const [showRejectDialog, setShowRejectDialog] = useState(false)
@@ -899,8 +1214,8 @@ function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete }) {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       onUpdate(data.job)
-      toast.success('Status updated with feedback!')
       setShowRejectDialog(false)
+      toast.success('Marked as rejected')
     } catch (error) {
       toast.error(error.message)
     } finally {
@@ -911,14 +1226,12 @@ function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete }) {
   if (editing) {
     return (
       <div className="h-full flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold">Edit Job</h2>
-          <Button variant="ghost" size="icon" onClick={() => setEditing(false)}>
-            <X className="w-4 h-4" />
-          </Button>
+        <div className="flex items-center justify-between p-3 border-b">
+          <h2 className="font-semibold">Edit Job</h2>
+          <Button variant="ghost" size="sm" onClick={() => setEditing(false)}><X className="w-4 h-4" /></Button>
         </div>
-        <ScrollArea className="flex-1 p-4">
-          <JobForm job={job} token={token} onSave={(updatedJob) => { onUpdate(updatedJob); setEditing(false); }} onCancel={() => setEditing(false)} />
+        <ScrollArea className="flex-1 p-3">
+          <JobForm job={job} token={token} userProfile={userProfile} onSave={(updated) => { onUpdate(updated); setEditing(false); }} onCancel={() => setEditing(false)} />
         </ScrollArea>
       </div>
     )
@@ -926,37 +1239,27 @@ function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete }) {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between p-4 border-b">
+      <div className="flex items-center justify-between p-3 border-b">
         <div>
-          <h2 className="text-lg font-semibold">{job.title}</h2>
+          <h2 className="font-semibold">{job.title}</h2>
           <p className="text-sm text-muted-foreground">{job.company}</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="ghost" size="icon" onClick={() => setEditing(true)}>
-            <Edit className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={onDelete}>
-            <Trash2 className="w-4 h-4 text-destructive" />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="w-4 h-4" />
-          </Button>
+        <div className="flex gap-1">
+          <Button variant="ghost" size="sm" onClick={() => setEditing(true)}><Edit className="w-4 h-4" /></Button>
+          <Button variant="ghost" size="sm" onClick={onDelete}><Trash2 className="w-4 h-4 text-red-500" /></Button>
+          <Button variant="ghost" size="sm" onClick={onClose}><X className="w-4 h-4" /></Button>
         </div>
       </div>
       
-      <div className="p-4 border-b space-y-3">
-        <div className="flex flex-wrap gap-2">
+      <div className="p-3 border-b">
+        <div className="flex flex-wrap gap-2 mb-2">
           {job.location && <Badge variant="outline"><MapPin className="w-3 h-3 mr-1" />{job.location}</Badge>}
           {job.salary && <Badge variant="outline"><DollarSign className="w-3 h-3 mr-1" />{job.salary}</Badge>}
           {job.closingDate && <Badge variant="outline"><Clock className="w-3 h-3 mr-1" />Closes: {job.closingDate}</Badge>}
-          {job.appliedDate && <Badge variant="outline"><Calendar className="w-3 h-3 mr-1" />Applied: {job.appliedDate}</Badge>}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-sm">Status:</span>
           <Select value={job.status} onValueChange={handleStatusChange} disabled={updatingStatus}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue />
-            </SelectTrigger>
+            <SelectTrigger className="w-[130px] h-8"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="saved">Saved</SelectItem>
               <SelectItem value="applied">Applied</SelectItem>
@@ -966,99 +1269,56 @@ function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete }) {
               <SelectItem value="withdrawn">Withdrawn</SelectItem>
             </SelectContent>
           </Select>
-          {job.url && (
-            <a href={job.url} target="_blank" rel="noopener noreferrer">
-              <Button variant="outline" size="sm"><ExternalLink className="w-4 h-4 mr-1" />View Job</Button>
-            </a>
-          )}
+          {job.url && <a href={job.url} target="_blank" rel="noopener noreferrer"><Button variant="outline" size="sm"><ExternalLink className="w-3 h-3 mr-1" />View</Button></a>}
         </div>
       </div>
       
       <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className="mx-4 mt-2">
-          <TabsTrigger value="details">Details</TabsTrigger>
-          <TabsTrigger value="resume">Resume</TabsTrigger>
-          <TabsTrigger value="coverLetter">Cover Letter</TabsTrigger>
-          <TabsTrigger value="supportingStatement">Statement</TabsTrigger>
+        <TabsList className="mx-3 mt-2 h-8">
+          <TabsTrigger value="details" className="text-xs">Details</TabsTrigger>
+          <TabsTrigger value="resume" className="text-xs">Resume</TabsTrigger>
+          <TabsTrigger value="coverLetter" className="text-xs">Cover Letter</TabsTrigger>
+          <TabsTrigger value="supportingStatement" className="text-xs">Statement</TabsTrigger>
         </TabsList>
         
         <ScrollArea className="flex-1">
-          <div className="p-4">
-            <TabsContent value="details" className="mt-0 space-y-4">
-              {job.description && (
-                <div>
-                  <h4 className="font-medium mb-2">Job Description</h4>
-                  <p className="text-sm whitespace-pre-wrap">{job.description}</p>
-                </div>
-              )}
-              {job.requirements && (
-                <div>
-                  <h4 className="font-medium mb-2">Requirements</h4>
-                  <p className="text-sm whitespace-pre-wrap">{job.requirements}</p>
-                </div>
-              )}
-              {job.benefits && (
-                <div>
-                  <h4 className="font-medium mb-2">Benefits</h4>
-                  <p className="text-sm whitespace-pre-wrap">{job.benefits}</p>
-                </div>
-              )}
-              {job.notes && (
-                <div>
-                  <h4 className="font-medium mb-2">Notes</h4>
-                  <p className="text-sm whitespace-pre-wrap">{job.notes}</p>
-                </div>
-              )}
+          <div className="p-3">
+            <TabsContent value="details" className="mt-0 space-y-3">
+              {job.description && <div><h4 className="font-medium text-sm mb-1">Description</h4><p className="text-xs whitespace-pre-wrap">{job.description}</p></div>}
+              {job.requirements && <div><h4 className="font-medium text-sm mb-1">Requirements</h4><p className="text-xs whitespace-pre-wrap">{job.requirements}</p></div>}
               {job.status === 'rejected' && (
-                <div className="p-4 bg-red-50 rounded-lg">
-                  <h4 className="font-medium mb-2 text-red-800 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4" /> Rejection Feedback
-                  </h4>
-                  <p className="text-sm text-red-700 whitespace-pre-wrap">{job.rejectionFeedback || 'No feedback recorded.'}</p>
-                  <Button variant="outline" size="sm" className="mt-2" onClick={() => setShowRejectDialog(true)}>
-                    Edit Feedback
-                  </Button>
+                <div className="p-3 bg-red-50 rounded-lg">
+                  <h4 className="font-medium text-sm mb-1 text-red-800"><AlertCircle className="w-3 h-3 inline mr-1" />Rejection Feedback</h4>
+                  <p className="text-xs text-red-700">{job.rejectionFeedback || 'No feedback recorded.'}</p>
+                  <Button variant="outline" size="sm" className="mt-2 h-7 text-xs" onClick={() => setShowRejectDialog(true)}>Edit</Button>
                 </div>
               )}
             </TabsContent>
             
             <TabsContent value="resume" className="mt-0">
-              <DocumentEditor job={job} documentType="resume" token={token} onUpdate={onUpdate} />
+              <DocumentEditor job={job} documentType="resume" token={token} onUpdate={onUpdate} userProfile={userProfile} />
             </TabsContent>
             
             <TabsContent value="coverLetter" className="mt-0">
-              <DocumentEditor job={job} documentType="coverLetter" token={token} onUpdate={onUpdate} />
+              <DocumentEditor job={job} documentType="coverLetter" token={token} onUpdate={onUpdate} userProfile={userProfile} />
             </TabsContent>
             
             <TabsContent value="supportingStatement" className="mt-0">
-              <DocumentEditor job={job} documentType="supportingStatement" token={token} onUpdate={onUpdate} />
+              <DocumentEditor job={job} documentType="supportingStatement" token={token} onUpdate={onUpdate} userProfile={userProfile} />
             </TabsContent>
           </div>
         </ScrollArea>
       </Tabs>
       
-      {/* Rejection Dialog */}
       <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Record Rejection Feedback</DialogTitle>
-            <DialogDescription>
-              Record any feedback or notes about why this application was rejected.
-            </DialogDescription>
+            <DialogTitle>Rejection Feedback</DialogTitle>
           </DialogHeader>
-          <div className="py-4">
-            <Textarea
-              placeholder="Enter rejection feedback or notes..."
-              className="min-h-[150px]"
-              value={rejectionFeedback}
-              onChange={(e) => setRejectionFeedback(e.target.value)}
-            />
-          </div>
+          <Textarea placeholder="Enter feedback..." className="min-h-[100px]" value={rejectionFeedback} onChange={(e) => setRejectionFeedback(e.target.value)} />
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowRejectDialog(false)}>Cancel</Button>
-            <Button onClick={handleRejectWithFeedback} disabled={updatingStatus}>
-              {updatingStatus ? 'Saving...' : 'Save & Mark Rejected'}
-            </Button>
+            <Button onClick={handleRejectWithFeedback} disabled={updatingStatus}>{updatingStatus ? 'Saving...' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1066,34 +1326,22 @@ function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete }) {
   )
 }
 
-// Dashboard Component
+// Dashboard
 function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedJob, setSelectedJob] = useState(null)
   const [showAddJob, setShowAddJob] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
-  const [profileData, setProfileData] = useState({ 
-    name: user.name, 
-    phone: user.phone || '',
-    baseResume: user.baseResume || ''
-  })
-  const [savingProfile, setSavingProfile] = useState(false)
   const [filter, setFilter] = useState('all')
 
-  useEffect(() => {
-    loadJobs()
-  }, [])
+  useEffect(() => { loadJobs() }, [])
 
   const loadJobs = async () => {
     try {
-      const res = await fetch('/api/jobs', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
+      const res = await fetch('/api/jobs', { headers: { 'Authorization': `Bearer ${token}` } })
       const data = await res.json()
-      if (res.ok) {
-        setJobs(data.jobs)
-      }
+      if (res.ok) setJobs(data.jobs)
     } catch (error) {
       toast.error('Failed to load jobs')
     } finally {
@@ -1102,47 +1350,18 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
   }
 
   const handleDeleteJob = async (jobId) => {
-    if (!confirm('Are you sure you want to delete this job?')) return
-    
+    if (!confirm('Delete this job?')) return
     try {
-      const res = await fetch(`/api/jobs/${jobId}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      if (!res.ok) throw new Error('Failed to delete')
-      
+      await fetch(`/api/jobs/${jobId}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } })
       setJobs(jobs.filter(j => j.id !== jobId))
       if (selectedJob?.id === jobId) setSelectedJob(null)
-      toast.success('Job deleted!')
+      toast.success('Deleted!')
     } catch (error) {
-      toast.error('Failed to delete job')
-    }
-  }
-
-  const handleSaveProfile = async () => {
-    setSavingProfile(true)
-    try {
-      const res = await fetch('/api/auth/profile', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(profileData)
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      
-      localStorage.setItem('user', JSON.stringify(data.user))
-      onUserUpdate(data.user)
-      toast.success('Profile updated!')
-      setShowProfile(false)
-    } catch (error) {
-      toast.error(error.message)
-    } finally {
-      setSavingProfile(false)
+      toast.error('Failed to delete')
     }
   }
 
   const filteredJobs = filter === 'all' ? jobs : jobs.filter(j => j.status === filter)
-  
   const stats = {
     total: jobs.length,
     applied: jobs.filter(j => j.status === 'applied').length,
@@ -1153,136 +1372,67 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
       <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center">
+            <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center">
               <Briefcase className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-semibold">Job Tracker</h1>
-              <p className="text-sm text-muted-foreground">Welcome, {user.name}</p>
+              <h1 className="font-semibold text-sm">Job Tracker</h1>
+              <p className="text-xs text-muted-foreground">Welcome, {user.name}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowProfile(true)}>
-              <User className="w-4 h-4 mr-2" /> Profile
-            </Button>
-            <Button variant="outline" size="sm" onClick={onLogout}>
-              <LogOut className="w-4 h-4 mr-2" /> Logout
-            </Button>
+            <Button variant="outline" size="sm" onClick={() => setShowProfile(true)}><User className="w-4 h-4 mr-1" />Profile</Button>
+            <Button variant="outline" size="sm" onClick={onLogout}><LogOut className="w-4 h-4 mr-1" />Logout</Button>
           </div>
         </div>
       </header>
       
-      {/* Stats */}
-      <div className="container mx-auto px-4 py-6">
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilter('all')}>
-            <CardContent className="pt-4">
-              <div className="text-2xl font-bold">{stats.total}</div>
-              <div className="text-sm text-muted-foreground">Total Jobs</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilter('applied')}>
-            <CardContent className="pt-4">
-              <div className="text-2xl font-bold text-blue-600">{stats.applied}</div>
-              <div className="text-sm text-muted-foreground">Applied</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilter('interview')}>
-            <CardContent className="pt-4">
-              <div className="text-2xl font-bold text-yellow-600">{stats.interview}</div>
-              <div className="text-sm text-muted-foreground">Interviews</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilter('offer')}>
-            <CardContent className="pt-4">
-              <div className="text-2xl font-bold text-green-600">{stats.offer}</div>
-              <div className="text-sm text-muted-foreground">Offers</div>
-            </CardContent>
-          </Card>
-          <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => setFilter('rejected')}>
-            <CardContent className="pt-4">
-              <div className="text-2xl font-bold text-red-600">{stats.rejected}</div>
-              <div className="text-sm text-muted-foreground">Rejected</div>
-            </CardContent>
-          </Card>
+      <div className="container mx-auto px-4 py-4">
+        <div className="grid grid-cols-5 gap-3 mb-4">
+          {[
+            { label: 'Total', value: stats.total, filter: 'all' },
+            { label: 'Applied', value: stats.applied, filter: 'applied', color: 'text-blue-600' },
+            { label: 'Interviews', value: stats.interview, filter: 'interview', color: 'text-yellow-600' },
+            { label: 'Offers', value: stats.offer, filter: 'offer', color: 'text-green-600' },
+            { label: 'Rejected', value: stats.rejected, filter: 'rejected', color: 'text-red-600' }
+          ].map(stat => (
+            <Card key={stat.filter} className="cursor-pointer hover:shadow-md" onClick={() => setFilter(stat.filter)}>
+              <CardContent className="py-3">
+                <div className={`text-xl font-bold ${stat.color || ''}`}>{stat.value}</div>
+                <div className="text-xs text-muted-foreground">{stat.label}</div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
         
-        {/* Main Content */}
-        <div className="flex gap-6">
-          {/* Job List */}
+        <div className="flex gap-4">
           <div className={`${selectedJob ? 'w-1/3' : 'w-full'} transition-all`}>
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-semibold">Applications</h2>
-                {filter !== 'all' && (
-                  <Badge variant="secondary" className="cursor-pointer" onClick={() => setFilter('all')}>
-                    {filter} <X className="w-3 h-3 ml-1" />
-                  </Badge>
-                )}
+                <h2 className="font-semibold">Applications</h2>
+                {filter !== 'all' && <Badge variant="secondary" className="cursor-pointer" onClick={() => setFilter('all')}>{filter} <X className="w-3 h-3 ml-1" /></Badge>}
               </div>
-              <Button onClick={() => setShowAddJob(true)}>
-                <Plus className="w-4 h-4 mr-2" /> Add Job
-              </Button>
+              <Button size="sm" onClick={() => setShowAddJob(true)}><Plus className="w-4 h-4 mr-1" />Add</Button>
             </div>
             
             {loading ? (
-              <div className="text-center py-12">
-                <RefreshCw className="w-8 h-8 mx-auto animate-spin text-muted-foreground" />
-                <p className="mt-2 text-muted-foreground">Loading jobs...</p>
-              </div>
+              <div className="text-center py-8"><RefreshCw className="w-6 h-6 mx-auto animate-spin text-muted-foreground" /></div>
             ) : filteredJobs.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Briefcase className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
-                  <h3 className="font-medium">No jobs found</h3>
-                  <p className="text-sm text-muted-foreground mt-1">Start by adding your first job application</p>
-                  <Button className="mt-4" onClick={() => setShowAddJob(true)}>
-                    <Plus className="w-4 h-4 mr-2" /> Add Job
-                  </Button>
-                </CardContent>
-              </Card>
+              <Card><CardContent className="py-8 text-center"><Briefcase className="w-10 h-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm">No jobs found</p></CardContent></Card>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-2">
                 {filteredJobs.map(job => (
-                  <Card 
-                    key={job.id} 
-                    className={`cursor-pointer hover:shadow-md transition-shadow ${selectedJob?.id === job.id ? 'ring-2 ring-primary' : ''}`}
-                    onClick={() => setSelectedJob(job)}
-                  >
-                    <CardContent className="py-4">
-                      <div className="flex items-start justify-between">
+                  <Card key={job.id} className={`cursor-pointer hover:shadow-md ${selectedJob?.id === job.id ? 'ring-2 ring-primary' : ''}`} onClick={() => setSelectedJob(job)}>
+                    <CardContent className="py-3">
+                      <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="font-medium">{job.title}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Building2 className="w-3 h-3 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">{job.company}</span>
-                            {job.location && (
-                              <>
-                                <span className="text-muted-foreground">•</span>
-                                <MapPin className="w-3 h-3 text-muted-foreground" />
-                                <span className="text-sm text-muted-foreground">{job.location}</span>
-                              </>
-                            )}
-                          </div>
-                          {job.salary && (
-                            <div className="flex items-center gap-1 mt-1">
-                              <DollarSign className="w-3 h-3 text-muted-foreground" />
-                              <span className="text-sm text-muted-foreground">{job.salary}</span>
-                            </div>
-                          )}
+                          <h3 className="font-medium text-sm">{job.title}</h3>
+                          <p className="text-xs text-muted-foreground">{job.company} {job.location && `• ${job.location}`}</p>
                         </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <Badge className={statusColors[job.status]}>
-                            {job.status.charAt(0).toUpperCase() + job.status.slice(1)}
-                          </Badge>
-                          {job.closingDate && (
-                            <span className="text-xs text-muted-foreground">Closes: {job.closingDate}</span>
-                          )}
-                        </div>
+                        <Badge className={statusColors[job.status]}>{job.status}</Badge>
                       </div>
                     </CardContent>
                   </Card>
@@ -1291,17 +1441,14 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
             )}
           </div>
           
-          {/* Job Details Panel */}
           {selectedJob && (
             <div className="w-2/3">
-              <Card className="h-[calc(100vh-280px)] overflow-hidden">
+              <Card className="h-[calc(100vh-220px)] overflow-hidden">
                 <JobDetailsPanel 
                   job={selectedJob} 
                   token={token}
-                  onUpdate={(updated) => {
-                    setJobs(jobs.map(j => j.id === updated.id ? updated : j))
-                    setSelectedJob(updated)
-                  }}
+                  userProfile={user}
+                  onUpdate={(updated) => { setJobs(jobs.map(j => j.id === updated.id ? updated : j)); setSelectedJob(updated); }}
                   onClose={() => setSelectedJob(null)}
                   onDelete={() => handleDeleteJob(selectedJob.id)}
                 />
@@ -1311,114 +1458,22 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
         </div>
       </div>
       
-      {/* Add Job Dialog */}
       <Dialog open={showAddJob} onOpenChange={setShowAddJob}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Add New Job</DialogTitle>
-            <DialogDescription>
-              Enter job details manually or paste a URL to extract details automatically.
-              {user.baseResume && <span className="block mt-1 text-green-600">✓ Your base resume will be used as starting point</span>}
-            </DialogDescription>
           </DialogHeader>
-          <JobForm 
-            token={token}
-            baseResume={user.baseResume}
-            onSave={(newJob) => {
-              setJobs([newJob, ...jobs])
-              setShowAddJob(false)
-              setSelectedJob(newJob)
-            }}
-            onCancel={() => setShowAddJob(false)}
-          />
+          <JobForm token={token} userProfile={user} onSave={(newJob) => { setJobs([newJob, ...jobs]); setShowAddJob(false); setSelectedJob(newJob); }} onCancel={() => setShowAddJob(false)} />
         </DialogContent>
       </Dialog>
       
-      {/* Profile Dialog */}
       <Dialog open={showProfile} onOpenChange={setShowProfile}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh]">
           <DialogHeader>
-            <DialogTitle>Profile Settings</DialogTitle>
-            <DialogDescription>
-              Update your profile and base resume. Your base resume will be used as the starting point for all new job applications.
-            </DialogDescription>
+            <DialogTitle>Profile & Resume Data</DialogTitle>
+            <DialogDescription>Your profile data is used as a template for AI-generated resumes</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Name</Label>
-                <Input value={profileData.name} onChange={(e) => setProfileData({...profileData, name: e.target.value})} />
-              </div>
-              <div className="space-y-2">
-                <Label>Phone</Label>
-                <Input value={profileData.phone} onChange={(e) => setProfileData({...profileData, phone: e.target.value})} placeholder="+44 123 456 7890" />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input value={user.email} disabled />
-              <p className="text-xs text-muted-foreground">Email cannot be changed</p>
-            </div>
-            
-            <Separator className="my-4" />
-            
-            <div className="space-y-2">
-              <Label className="flex items-center gap-2">
-                <FileText className="w-4 h-4" />
-                Base Resume (Markdown)
-              </Label>
-              <p className="text-sm text-muted-foreground">
-                This will be used as the starting content when creating resumes for new job applications.
-              </p>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-sm mb-2 block">Editor</Label>
-                  <Textarea 
-                    placeholder={`# CONTACT
-John Doe | john@email.com | +44 123 456 7890 | London, UK
-
-# PROFESSIONAL SUMMARY
-Experienced software developer with 5+ years...
-
-# EXPERIENCE
-**Senior Developer** - Tech Corp (2020-Present)
-- Led team of 5 developers on critical projects
-- Implemented CI/CD pipeline reducing deployment time by 40%
-- Mentored junior developers
-
-**Developer** - Startup Inc (2018-2020)
-- Built REST APIs serving 1M+ requests daily
-- Developed React frontend components
-
-# SKILLS
-- Languages: JavaScript, Python, TypeScript
-- Frameworks: React, Node.js, Django
-- Tools: Git, Docker, AWS
-
-# EDUCATION
-**BSc Computer Science** - University of London (2018)
-- First Class Honours`}
-                    className="min-h-[400px] font-mono text-sm"
-                    value={profileData.baseResume}
-                    onChange={(e) => setProfileData({...profileData, baseResume: e.target.value})}
-                  />
-                </div>
-                <div>
-                  <Label className="text-sm mb-2 block">Preview</Label>
-                  <div className="border rounded-lg p-2 bg-gray-100 h-[400px] overflow-hidden">
-                    <PDFPreview content={profileData.baseResume} maxPages={2} documentType="resume" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowProfile(false)}>Cancel</Button>
-            <Button onClick={handleSaveProfile} disabled={savingProfile}>
-              {savingProfile ? 'Saving...' : 'Save Changes'}
-            </Button>
-          </DialogFooter>
+          <ProfileEditor user={user} token={token} onSave={(updated) => { localStorage.setItem('user', JSON.stringify(updated)); onUserUpdate(updated); setShowProfile(false); }} onCancel={() => setShowProfile(false)} />
         </DialogContent>
       </Dialog>
     </div>
@@ -1432,10 +1487,8 @@ export default function App() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check for existing session
     const savedToken = localStorage.getItem('token')
     const savedUser = localStorage.getItem('user')
-    
     if (savedToken && savedUser) {
       setToken(savedToken)
       setUser(JSON.parse(savedUser))
@@ -1443,34 +1496,7 @@ export default function App() {
     setLoading(false)
   }, [])
 
-  const handleLogin = (userData, authToken) => {
-    setUser(userData)
-    setToken(authToken)
-  }
-
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('user')
-    setUser(null)
-    setToken(null)
-    toast.success('Logged out successfully')
-  }
-
-  const handleUserUpdate = (userData) => {
-    setUser(userData)
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <RefreshCw className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    )
-  }
-
-  if (!user) {
-    return <AuthPage onLogin={handleLogin} />
-  }
-
-  return <Dashboard user={user} token={token} onLogout={handleLogout} onUserUpdate={handleUserUpdate} />
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><RefreshCw className="w-8 h-8 animate-spin text-primary" /></div>
+  if (!user) return <AuthPage onLogin={(u, t) => { setUser(u); setToken(t); }} />
+  return <Dashboard user={user} token={token} onLogout={() => { localStorage.clear(); setUser(null); setToken(null); }} onUserUpdate={setUser} />
 }

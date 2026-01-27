@@ -1,14 +1,16 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { toast } from 'sonner'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -16,7 +18,7 @@ import { Separator } from '@/components/ui/separator'
 import { 
   Briefcase, Plus, LogOut, User, FileText, Sparkles, ExternalLink, 
   Trash2, Edit, Calendar, Building2, MapPin, DollarSign, Clock,
-  Download, Copy, RefreshCw, X, Check, AlertCircle
+  Download, Copy, RefreshCw, X, Check, AlertCircle, Eye, FileEdit
 } from 'lucide-react'
 
 // Status colors
@@ -27,6 +29,148 @@ const statusColors = {
   offer: 'bg-green-100 text-green-800',
   rejected: 'bg-red-100 text-red-800',
   withdrawn: 'bg-purple-100 text-purple-800'
+}
+
+// PDF Preview Component with Harvard Style
+function PDFPreview({ content, maxPages = 2, documentType = 'resume' }) {
+  const previewRef = useRef(null)
+  const [pages, setPages] = useState([])
+  const [overflow, setOverflow] = useState(false)
+  
+  // Parse markdown into sections for proper page breaking
+  const parseContentIntoSections = useCallback((text) => {
+    if (!text) return []
+    
+    const lines = text.split('\n')
+    const sections = []
+    let currentSection = { title: '', content: [], isHeader: false }
+    
+    lines.forEach(line => {
+      // Check if it's a header (markdown style)
+      if (line.match(/^#{1,3}\s+/) || line.match(/^[A-Z][A-Z\s]+$/)) {
+        if (currentSection.content.length > 0 || currentSection.title) {
+          sections.push(currentSection)
+        }
+        currentSection = { 
+          title: line.replace(/^#+\s*/, '').trim(), 
+          content: [], 
+          isHeader: true 
+        }
+      } else if (line.trim()) {
+        currentSection.content.push(line)
+      }
+    })
+    
+    if (currentSection.content.length > 0 || currentSection.title) {
+      sections.push(currentSection)
+    }
+    
+    return sections
+  }, [])
+
+  // Calculate pages without breaking sections
+  useEffect(() => {
+    if (!content) {
+      setPages([])
+      setOverflow(false)
+      return
+    }
+
+    const sections = parseContentIntoSections(content)
+    const linesPerPage = documentType === 'supportingStatement' ? 45 : 40
+    const newPages = []
+    let currentPage = []
+    let currentLineCount = 0
+
+    sections.forEach(section => {
+      const sectionLines = (section.title ? 2 : 0) + section.content.length + 1
+      
+      // If adding this section would overflow, start a new page
+      if (currentLineCount + sectionLines > linesPerPage && currentPage.length > 0) {
+        newPages.push([...currentPage])
+        currentPage = []
+        currentLineCount = 0
+      }
+      
+      currentPage.push(section)
+      currentLineCount += sectionLines
+    })
+
+    if (currentPage.length > 0) {
+      newPages.push(currentPage)
+    }
+
+    setPages(newPages)
+    setOverflow(newPages.length > maxPages)
+  }, [content, maxPages, documentType, parseContentIntoSections])
+
+  if (!content) {
+    return (
+      <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg border-2 border-dashed">
+        <p className="text-muted-foreground">Enter content to see preview</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      {overflow && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-red-600" />
+          <span className="text-sm text-red-700">
+            Content exceeds {maxPages} pages ({pages.length} pages). Please reduce content.
+          </span>
+        </div>
+      )}
+      
+      <div className="flex gap-2 text-sm text-muted-foreground mb-2">
+        <span>Pages: {pages.length}/{maxPages}</span>
+        {!overflow && <Check className="w-4 h-4 text-green-600" />}
+      </div>
+      
+      <div ref={previewRef} className="space-y-4 max-h-[600px] overflow-y-auto">
+        {pages.map((pageSections, pageIndex) => (
+          <div 
+            key={pageIndex} 
+            className={`bg-white border rounded-lg shadow-sm p-8 min-h-[500px] ${
+              pageIndex >= maxPages ? 'border-red-300 bg-red-50' : ''
+            }`}
+            style={{ fontFamily: 'Georgia, serif' }}
+          >
+            <div className="text-xs text-muted-foreground mb-4 text-right">
+              Page {pageIndex + 1} of {pages.length}
+            </div>
+            
+            {pageSections.map((section, sectionIndex) => (
+              <div key={sectionIndex} className="mb-4">
+                {section.title && (
+                  <h3 className="text-lg font-bold text-gray-900 border-b border-gray-300 pb-1 mb-2 uppercase tracking-wide">
+                    {section.title}
+                  </h3>
+                )}
+                {section.content.map((line, lineIndex) => (
+                  <div key={lineIndex} className="text-sm text-gray-700 leading-relaxed">
+                    <ReactMarkdown 
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        p: ({children}) => <p className="mb-1">{children}</p>,
+                        ul: ({children}) => <ul className="list-disc ml-4 mb-2">{children}</ul>,
+                        li: ({children}) => <li className="mb-0.5">{children}</li>,
+                        strong: ({children}) => <strong className="font-semibold">{children}</strong>,
+                        a: ({children, href}) => <a href={href} className="text-blue-600 underline">{children}</a>
+                      }}
+                    >
+                      {line}
+                    </ReactMarkdown>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
 }
 
 // Auth Component
@@ -259,7 +403,7 @@ function AuthPage({ onLogin }) {
 }
 
 // Job Form Component
-function JobForm({ job, onSave, onCancel, token }) {
+function JobForm({ job, onSave, onCancel, token, baseResume }) {
   const [loading, setLoading] = useState(false)
   const [scraping, setScraping] = useState(false)
   const [formData, setFormData] = useState({
@@ -318,10 +462,16 @@ function JobForm({ job, onSave, onCancel, token }) {
       const url = job ? `/api/jobs/${job.id}` : '/api/jobs'
       const method = job ? 'PUT' : 'POST'
       
+      // For new jobs, include base resume
+      const submitData = { ...formData }
+      if (!job && baseResume) {
+        submitData.resume = { content: baseResume, refinedContent: '' }
+      }
+      
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(submitData)
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -422,7 +572,7 @@ function JobForm({ job, onSave, onCancel, token }) {
   )
 }
 
-// Document Editor Component
+// Enhanced Document Editor with Live PDF Preview
 function DocumentEditor({ job, documentType, token, onUpdate }) {
   const docLabels = { resume: 'Resume', coverLetter: 'Cover Letter', supportingStatement: 'Supporting Statement' }
   const maxPages = { resume: 2, coverLetter: 2, supportingStatement: 3 }
@@ -432,6 +582,10 @@ function DocumentEditor({ job, documentType, token, onUpdate }) {
   const [preferences, setPreferences] = useState('')
   const [refining, setRefining] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [showRefined, setShowRefined] = useState(false)
+
+  // Use refined content for preview if available, otherwise use original
+  const previewContent = showRefined && refinedContent ? refinedContent : content
 
   const handleRefine = async () => {
     if (!content) {
@@ -459,6 +613,7 @@ function DocumentEditor({ job, documentType, token, onUpdate }) {
       if (!res.ok) throw new Error(data.error)
       
       setRefinedContent(data.refinedContent)
+      setShowRefined(true)
       toast.success('Document refined successfully!')
     } catch (error) {
       toast.error('Failed to refine document: ' + error.message)
@@ -490,7 +645,7 @@ function DocumentEditor({ job, documentType, token, onUpdate }) {
   }
 
   const downloadTxt = () => {
-    const text = refinedContent || content
+    const text = showRefined && refinedContent ? refinedContent : content
     const blob = new Blob([text], { type: 'text/plain' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -503,43 +658,108 @@ function DocumentEditor({ job, documentType, token, onUpdate }) {
   const downloadPdf = async () => {
     const { jsPDF } = await import('jspdf')
     const doc = new jsPDF()
-    const text = refinedContent || content
+    const text = showRefined && refinedContent ? refinedContent : content
     
-    // Set font size and line height
-    doc.setFontSize(11)
+    // Parse sections for proper page breaking
+    const lines = text.split('\n')
+    const margin = 20
     const pageWidth = doc.internal.pageSize.getWidth()
     const pageHeight = doc.internal.pageSize.getHeight()
-    const margin = 20
     const maxWidth = pageWidth - 2 * margin
-    const lineHeight = 6
-    
-    // Split text into lines
-    const lines = doc.splitTextToSize(text, maxWidth)
-    
-    let y = margin
     const maxY = pageHeight - margin
     
-    for (let i = 0; i < lines.length; i++) {
-      if (y + lineHeight > maxY) {
+    let y = margin
+    let currentSection = []
+    
+    const flushSection = () => {
+      if (currentSection.length === 0) return
+      
+      // Calculate section height
+      let sectionHeight = 0
+      currentSection.forEach(item => {
+        const splitLines = doc.splitTextToSize(item.text, maxWidth)
+        sectionHeight += splitLines.length * item.lineHeight
+      })
+      
+      // Check if section fits on current page
+      if (y + sectionHeight > maxY && y > margin) {
         doc.addPage()
         y = margin
       }
-      doc.text(lines[i], margin, y)
-      y += lineHeight
+      
+      // Render section
+      currentSection.forEach(item => {
+        if (item.isHeader) {
+          doc.setFontSize(14)
+          doc.setFont('helvetica', 'bold')
+        } else {
+          doc.setFontSize(11)
+          doc.setFont('helvetica', 'normal')
+        }
+        
+        const splitLines = doc.splitTextToSize(item.text, maxWidth)
+        splitLines.forEach(line => {
+          if (y + item.lineHeight > maxY) {
+            doc.addPage()
+            y = margin
+          }
+          doc.text(line, margin, y)
+          y += item.lineHeight
+        })
+      })
+      
+      currentSection = []
     }
+    
+    lines.forEach(line => {
+      const trimmedLine = line.trim()
+      if (!trimmedLine) {
+        flushSection()
+        y += 3
+        return
+      }
+      
+      // Check if it's a header
+      const isHeader = trimmedLine.match(/^#{1,3}\s+/) || 
+                       (trimmedLine === trimmedLine.toUpperCase() && trimmedLine.length > 3)
+      
+      if (isHeader && currentSection.length > 0) {
+        flushSection()
+      }
+      
+      currentSection.push({
+        text: trimmedLine.replace(/^#+\s*/, ''),
+        isHeader,
+        lineHeight: isHeader ? 8 : 6
+      })
+    })
+    
+    flushSection()
     
     doc.save(`${job.company}-${docLabels[documentType]}.pdf`)
   }
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(refinedContent || content)
+    const text = showRefined && refinedContent ? refinedContent : content
+    navigator.clipboard.writeText(text)
     toast.success('Copied to clipboard!')
+  }
+
+  const useRefinedContent = () => {
+    setContent(refinedContent)
+    setRefinedContent('')
+    setShowRefined(false)
+    toast.success('Refined content applied to editor')
   }
 
   return (
     <div className="space-y-4">
+      {/* Header with actions */}
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold">{docLabels[documentType]} (Max {maxPages[documentType]} A4 pages)</h3>
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold">{docLabels[documentType]}</h3>
+          <Badge variant="outline">Max {maxPages[documentType]} A4 pages</Badge>
+        </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={downloadTxt}>
             <Download className="w-4 h-4 mr-1" /> TXT
@@ -553,41 +773,81 @@ function DocumentEditor({ job, documentType, token, onUpdate }) {
         </div>
       </div>
       
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label>Your Content / Draft</Label>
-          <Textarea 
-            placeholder={`Enter your ${docLabels[documentType].toLowerCase()} content or draft...`}
-            className="min-h-[300px] font-mono text-sm"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
+      {/* AI Preferences */}
+      <div className="flex gap-2 items-end">
+        <div className="flex-1">
+          <Label className="text-sm">AI Instructions (optional)</Label>
+          <Input 
+            placeholder="e.g., Focus on leadership experience, highlight Python skills..."
+            value={preferences}
+            onChange={(e) => setPreferences(e.target.value)}
           />
         </div>
-        <div className="space-y-2">
-          <Label>AI Refined Version</Label>
-          <Textarea 
-            placeholder="Click 'Refine with AI' to generate..."
-            className="min-h-[300px] font-mono text-sm bg-muted"
-            value={refinedContent}
-            onChange={(e) => setRefinedContent(e.target.value)}
-          />
-        </div>
-      </div>
-      
-      <div className="space-y-2">
-        <Label>Preferences / Instructions for AI</Label>
-        <Input 
-          placeholder="e.g., Focus on leadership experience, highlight Python skills..."
-          value={preferences}
-          onChange={(e) => setPreferences(e.target.value)}
-        />
-      </div>
-      
-      <div className="flex gap-2 justify-end">
-        <Button variant="outline" onClick={handleRefine} disabled={refining}>
+        <Button onClick={handleRefine} disabled={refining} className="bg-purple-600 hover:bg-purple-700">
           {refining ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
           {refining ? 'Refining...' : 'Refine with AI'}
         </Button>
+      </div>
+      
+      {/* Editor and Preview side by side */}
+      <div className="grid grid-cols-2 gap-4">
+        {/* Left: Editor */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <FileEdit className="w-4 h-4" /> Markdown Editor
+            </Label>
+            {refinedContent && (
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant={!showRefined ? "default" : "outline"} onClick={() => setShowRefined(false)}>
+                  Original
+                </Button>
+                <Button size="sm" variant={showRefined ? "default" : "outline"} onClick={() => setShowRefined(true)}>
+                  Refined
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          {showRefined && refinedContent ? (
+            <div className="space-y-2">
+              <Textarea 
+                placeholder="AI refined content..."
+                className="min-h-[400px] font-mono text-sm bg-purple-50"
+                value={refinedContent}
+                onChange={(e) => setRefinedContent(e.target.value)}
+              />
+              <Button size="sm" variant="outline" onClick={useRefinedContent}>
+                <Check className="w-4 h-4 mr-1" /> Apply to Original
+              </Button>
+            </div>
+          ) : (
+            <Textarea 
+              placeholder={`Enter your ${docLabels[documentType].toLowerCase()} in Markdown format...\n\n# CONTACT\nJohn Doe | john@email.com | +44 123 456 7890\n\n# SUMMARY\nExperienced software developer...\n\n# EXPERIENCE\n**Senior Developer** - Tech Corp (2020-Present)\n- Led team of 5 developers\n- Implemented CI/CD pipeline`}
+              className="min-h-[400px] font-mono text-sm"
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+            />
+          )}
+        </div>
+        
+        {/* Right: PDF Preview */}
+        <div className="space-y-2">
+          <Label className="flex items-center gap-2">
+            <Eye className="w-4 h-4" /> PDF Preview (Harvard Style)
+          </Label>
+          <div className="border rounded-lg p-2 bg-gray-100 h-[420px] overflow-hidden">
+            <PDFPreview 
+              content={previewContent} 
+              maxPages={maxPages[documentType]}
+              documentType={documentType}
+            />
+          </div>
+        </div>
+      </div>
+      
+      {/* Save button */}
+      <div className="flex gap-2 justify-end">
         <Button onClick={handleSave} disabled={saving}>
           {saving ? 'Saving...' : 'Save Document'}
         </Button>
@@ -807,13 +1067,17 @@ function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete }) {
 }
 
 // Dashboard Component
-function Dashboard({ user, token, onLogout }) {
+function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedJob, setSelectedJob] = useState(null)
   const [showAddJob, setShowAddJob] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
-  const [profileData, setProfileData] = useState({ name: user.name, phone: user.phone || '' })
+  const [profileData, setProfileData] = useState({ 
+    name: user.name, 
+    phone: user.phone || '',
+    baseResume: user.baseResume || ''
+  })
   const [savingProfile, setSavingProfile] = useState(false)
   const [filter, setFilter] = useState('all')
 
@@ -867,6 +1131,7 @@ function Dashboard({ user, token, onLogout }) {
       if (!res.ok) throw new Error(data.error)
       
       localStorage.setItem('user', JSON.stringify(data.user))
+      onUserUpdate(data.user)
       toast.success('Profile updated!')
       setShowProfile(false)
     } catch (error) {
@@ -949,7 +1214,7 @@ function Dashboard({ user, token, onLogout }) {
         {/* Main Content */}
         <div className="flex gap-6">
           {/* Job List */}
-          <div className={`${selectedJob ? 'w-1/2' : 'w-full'} transition-all`}>
+          <div className={`${selectedJob ? 'w-1/3' : 'w-full'} transition-all`}>
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-semibold">Applications</h2>
@@ -1028,7 +1293,7 @@ function Dashboard({ user, token, onLogout }) {
           
           {/* Job Details Panel */}
           {selectedJob && (
-            <div className="w-1/2">
+            <div className="w-2/3">
               <Card className="h-[calc(100vh-280px)] overflow-hidden">
                 <JobDetailsPanel 
                   job={selectedJob} 
@@ -1053,10 +1318,12 @@ function Dashboard({ user, token, onLogout }) {
             <DialogTitle>Add New Job</DialogTitle>
             <DialogDescription>
               Enter job details manually or paste a URL to extract details automatically.
+              {user.baseResume && <span className="block mt-1 text-green-600">✓ Your base resume will be used as starting point</span>}
             </DialogDescription>
           </DialogHeader>
           <JobForm 
             token={token}
+            baseResume={user.baseResume}
             onSave={(newJob) => {
               setJobs([newJob, ...jobs])
               setShowAddJob(false)
@@ -1069,23 +1336,81 @@ function Dashboard({ user, token, onLogout }) {
       
       {/* Profile Dialog */}
       <Dialog open={showProfile} onOpenChange={setShowProfile}>
-        <DialogContent>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Update Profile</DialogTitle>
+            <DialogTitle>Profile Settings</DialogTitle>
+            <DialogDescription>
+              Update your profile and base resume. Your base resume will be used as the starting point for all new job applications.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Name</Label>
-              <Input value={profileData.name} onChange={(e) => setProfileData({...profileData, name: e.target.value})} />
-            </div>
-            <div className="space-y-2">
-              <Label>Phone</Label>
-              <Input value={profileData.phone} onChange={(e) => setProfileData({...profileData, phone: e.target.value})} placeholder="+44 123 456 7890" />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input value={profileData.name} onChange={(e) => setProfileData({...profileData, name: e.target.value})} />
+              </div>
+              <div className="space-y-2">
+                <Label>Phone</Label>
+                <Input value={profileData.phone} onChange={(e) => setProfileData({...profileData, phone: e.target.value})} placeholder="+44 123 456 7890" />
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Email</Label>
               <Input value={user.email} disabled />
               <p className="text-xs text-muted-foreground">Email cannot be changed</p>
+            </div>
+            
+            <Separator className="my-4" />
+            
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <FileText className="w-4 h-4" />
+                Base Resume (Markdown)
+              </Label>
+              <p className="text-sm text-muted-foreground">
+                This will be used as the starting content when creating resumes for new job applications.
+              </p>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm mb-2 block">Editor</Label>
+                  <Textarea 
+                    placeholder={`# CONTACT
+John Doe | john@email.com | +44 123 456 7890 | London, UK
+
+# PROFESSIONAL SUMMARY
+Experienced software developer with 5+ years...
+
+# EXPERIENCE
+**Senior Developer** - Tech Corp (2020-Present)
+- Led team of 5 developers on critical projects
+- Implemented CI/CD pipeline reducing deployment time by 40%
+- Mentored junior developers
+
+**Developer** - Startup Inc (2018-2020)
+- Built REST APIs serving 1M+ requests daily
+- Developed React frontend components
+
+# SKILLS
+- Languages: JavaScript, Python, TypeScript
+- Frameworks: React, Node.js, Django
+- Tools: Git, Docker, AWS
+
+# EDUCATION
+**BSc Computer Science** - University of London (2018)
+- First Class Honours`}
+                    className="min-h-[400px] font-mono text-sm"
+                    value={profileData.baseResume}
+                    onChange={(e) => setProfileData({...profileData, baseResume: e.target.value})}
+                  />
+                </div>
+                <div>
+                  <Label className="text-sm mb-2 block">Preview</Label>
+                  <div className="border rounded-lg p-2 bg-gray-100 h-[400px] overflow-hidden">
+                    <PDFPreview content={profileData.baseResume} maxPages={2} documentType="resume" />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -1131,6 +1456,10 @@ export default function App() {
     toast.success('Logged out successfully')
   }
 
+  const handleUserUpdate = (userData) => {
+    setUser(userData)
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -1143,5 +1472,5 @@ export default function App() {
     return <AuthPage onLogin={handleLogin} />
   }
 
-  return <Dashboard user={user} token={token} onLogout={handleLogout} />
+  return <Dashboard user={user} token={token} onLogout={handleLogout} onUserUpdate={handleUserUpdate} />
 }

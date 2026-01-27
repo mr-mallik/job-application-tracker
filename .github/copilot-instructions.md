@@ -17,7 +17,9 @@ Job scraping follows a 3-step pipeline:
 ### AI Integration Pattern
 - `lib/gemini.js` implements model fallback: tries `gemini-2.5-flash` → `gemini-2.0-flash` → `gemini-2.0-flash-001` with retries
 - `refineDocument()` generates resumes/cover letters with **strict rules**: never fabricate data, only use provided content
+- `parseResumePDF()` extracts structured profile data from uploaded PDF resumes using Gemini AI
 - Resume generation requires user profile structure with specific markdown format (see lines 180-230 in [lib/gemini.js](lib/gemini.js))
+- Resume parsing endpoint: `POST /api/auth/parse-resume` accepts base64 PDF content and returns structured profile data
 
 ### Frontend Architecture
 - **Single-page application**: All UI is in [app/page.js](app/page.js) (1100+ lines)
@@ -35,13 +37,21 @@ GEMINI_API_KEY=...
 JWT_SECRET=...
 CORS_ORIGINS=*
 DB_NAME=job_tracker
+
+# Optional SMTP (falls back to console logging)
+SMTP_HOST=smtp.hostinger.com
+SMTP_PORT=465
+SMTP_USERNAME=notifications@cosmokode.com
+SMTP_PASSWORD=...
+SMTP_ENCRYPTION=ssl
 ```
 
 ### Authentication
 - JWT tokens with 7-day expiry ([lib/auth.js](lib/auth.js))
 - All protected routes check `Authorization: Bearer <token>` header
-- Email verification uses console-logged codes (no email service configured)
-- Password reset codes also logged to console
+- Email verification via SMTP (nodemailer) - falls back to console logging if SMTP not configured
+- Password reset codes sent via email with 1-hour expiry
+- Supports SSL/TLS SMTP (Hostinger configuration included)
 
 ### Database Schema
 MongoDB collections (no schema enforcement):
@@ -112,16 +122,18 @@ When modifying `refineDocument()`:
 
 **Modify job scraping logic**: Update [lib/scraper.js](lib/scraper.js) for extraction, [lib/gemini.js](lib/gemini.js) for classification prompt
 
+**Parse resume PDFs**: Use `parseResumePDF(base64Content)` from [lib/gemini.js](lib/gemini.js) - automatically extracts structured profile data with chronological sorting
+
 **Change database schema**: Update object structure in route handlers—no migrations needed (schema-less MongoDB)
 
 **Debug Gemini failures**: Check console logs for model rotation attempts, ensure `GEMINI_API_KEY` is set, verify against [list_gemini_models.py](list_gemini_models.py)
 
 ## Known Constraints
-- No email service (verification codes logged to console)
 - Playwright requires system dependencies (fails without browser binaries)
 - Gemini API rate limits require fallback logic
 - Frontend is not mobile-optimized (desktop-first design)
 - No database migrations or seeding—create test data via API
+- SMTP email falls back to console logging if credentials not configured
 
 ## Project-Specific Anti-Patterns
 ❌ Do NOT create separate route files in `app/api/`—everything goes in the catch-all route

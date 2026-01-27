@@ -849,7 +849,9 @@ function ProfileEditor({ user, token, onSave, onCancel }) {
     interests: user.interests || [], achievements: user.achievements || ''
   })
   const [saving, setSaving] = useState(false)
+  const [parsing, setParsing] = useState(false)
   const [activeTab, setActiveTab] = useState('basic')
+  const fileInputRef = useRef(null)
 
   const addExperience = () => setProfileData(prev => ({ ...prev, experiences: [...prev.experiences, { title: '', company: '', location: '', startDate: '', endDate: '', description: '' }] }))
   const updateExperience = (i, data) => setProfileData(prev => ({ ...prev, experiences: prev.experiences.map((exp, idx) => idx === i ? data : exp) }))
@@ -860,6 +862,82 @@ function ProfileEditor({ user, token, onSave, onCancel }) {
   const removeProject = (i) => setProfileData(prev => ({ ...prev, projects: prev.projects.filter((_, idx) => idx !== i) }))
   
   const addInterest = () => setProfileData(prev => ({ ...prev, interests: [...prev.interests, { title: '', description: '' }] }))
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    if (file.type !== 'application/pdf') {
+      toast.error('Please upload a PDF file')
+      return
+    }
+
+    if (file.size > 5 * 1024 * 1024) { // 5MB limit
+      toast.error('File size must be less than 5MB')
+      return
+    }
+
+    setParsing(true)
+    try {
+      // Convert PDF to base64
+      const reader = new FileReader()
+      reader.onload = async (event) => {
+        try {
+          const base64Content = event.target.result.split(',')[1]
+          
+          // Call API to parse resume
+          const res = await fetch('/api/auth/parse-resume', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json', 
+              'Authorization': `Bearer ${token}` 
+            },
+            body: JSON.stringify({ base64Content })
+          })
+          
+          const data = await res.json()
+          if (!res.ok) throw new Error(data.error)
+          
+          // Populate form with parsed data (preserve email from current user)
+          setProfileData({
+            ...data.profileData,
+            email: user.email // Don't overwrite email
+          })
+          
+          toast.success('Resume imported successfully!')
+          setActiveTab('basic') // Switch to basic tab to show imported data
+        } catch (error) {
+          toast.error(error.message)
+        } finally {
+          setParsing(false)
+        }
+      }
+      reader.onerror = () => {
+        toast.error('Failed to read file')
+        setParsing(false)
+      }
+      reader.readAsDataURL(file)
+    } catch (error) {
+      toast.error(error.message)
+      setParsing(false)
+    }
+  }
+
+  const sortExperiencesChronologically = () => {
+    const sorted = [...profileData.experiences].sort((a, b) => {
+      const parseDate = (dateStr) => {
+        if (!dateStr || dateStr.toLowerCase() === 'present') return new Date()
+        const parts = dateStr.split('/')
+        if (parts.length === 2) {
+          return new Date(parseInt(parts[1]), parseInt(parts[0]) - 1)
+        }
+        return new Date(0)
+      }
+      return parseDate(b.startDate) - parseDate(a.startDate) // Most recent first
+    })
+    setProfileData({ ...profileData, experiences: sorted })
+    toast.success('Experiences sorted chronologically')
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -875,9 +953,23 @@ function ProfileEditor({ user, token, onSave, onCancel }) {
   const generatePreviewContent = () => {
     let content = ''
     if (profileData.summary) content += `# SUMMARY\n${profileData.summary}\n\n`
-    if (profileData.experiences.length > 0) {
+    
+    // Sort experiences chronologically before displaying
+    const sortedExperiences = [...profileData.experiences].sort((a, b) => {
+      const parseDate = (dateStr) => {
+        if (!dateStr || dateStr.toLowerCase() === 'present') return new Date()
+        const parts = dateStr.split('/')
+        if (parts.length === 2) {
+          return new Date(parseInt(parts[1]), parseInt(parts[0]) - 1)
+        }
+        return new Date(0)
+      }
+      return parseDate(b.startDate) - parseDate(a.startDate)
+    })
+    
+    if (sortedExperiences.length > 0) {
       content += `# RELEVANT WORK EXPERIENCE\n`
-      profileData.experiences.forEach(exp => {
+      sortedExperiences.forEach(exp => {
         content += `**${exp.title} | ${exp.company}, ${exp.location} | ${exp.startDate} - ${exp.endDate}**\n`
         if (exp.description) exp.description.split('\n').forEach(line => { if (line.trim()) content += `- ${line.trim()}\n` })
         content += '\n'
@@ -906,6 +998,41 @@ function ProfileEditor({ user, token, onSave, onCancel }) {
     <div className="flex gap-6 h-[75vh]">
       {/* Editor Panel */}
       <div className="w-1/2 overflow-y-auto pr-4">
+        {/* Upload Resume Button */}
+        <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
+          <div className="flex items-center justify-between">
+            <div className="flex-1">
+              <h3 className="font-semibold text-sm flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-purple-600" />
+                Import Resume with AI
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">Upload your PDF resume to auto-populate all fields</p>
+            </div>
+            <div className="flex gap-2">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf"
+                onChange={handleFileUpload}
+                className="hidden"
+              />
+              <Button 
+                size="sm" 
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={parsing}
+                className="bg-white"
+              >
+                {parsing ? (
+                  <><RefreshCw className="w-4 h-4 mr-1 animate-spin" />Parsing...</>
+                ) : (
+                  <><FileText className="w-4 h-4 mr-1" />Upload PDF</>
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid grid-cols-5 mb-4">
             <TabsTrigger value="basic"><User className="w-4 h-4" /></TabsTrigger>
@@ -929,7 +1056,17 @@ function ProfileEditor({ user, token, onSave, onCancel }) {
           </TabsContent>
           
           <TabsContent value="experience" className="space-y-3">
-            <div className="flex justify-between items-center"><h3 className="font-semibold">Work Experience</h3><Button size="sm" onClick={addExperience}><Plus className="w-4 h-4 mr-1" />Add</Button></div>
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold">Work Experience</h3>
+              <div className="flex gap-2">
+                {profileData.experiences.length > 1 && (
+                  <Button size="sm" variant="outline" onClick={sortExperiencesChronologically}>
+                    <Clock className="w-4 h-4 mr-1" />Sort
+                  </Button>
+                )}
+                <Button size="sm" onClick={addExperience}><Plus className="w-4 h-4 mr-1" />Add</Button>
+              </div>
+            </div>
             {profileData.experiences.map((exp, i) => <ExperienceEntry key={i} experience={exp} index={i} onChange={(data) => updateExperience(i, data)} onRemove={() => removeExperience(i)} />)}
             {profileData.experiences.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No experience added</p>}
           </TabsContent>
@@ -1223,7 +1360,7 @@ function Dashboard({ user, token, onLogout, onUserUpdate }) {
       </div>
       
       <Dialog open={showAddJob} onOpenChange={setShowAddJob}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>Add New Job</DialogTitle></DialogHeader><JobForm token={token} userProfile={user} onSave={(nj) => { setJobs([nj, ...jobs]); setShowAddJob(false); setSelectedJob(nj); }} onCancel={() => setShowAddJob(false)} /></DialogContent></Dialog>
-      <Dialog open={showProfile} onOpenChange={setShowProfile}><DialogContent className="max-w-5xl max-h-[90vh]"><DialogHeader><DialogTitle>Profile & Resume Data</DialogTitle><DialogDescription>Your data is used as template for AI-generated resumes</DialogDescription></DialogHeader><ProfileEditor user={user} token={token} onSave={(u) => { localStorage.setItem('user', JSON.stringify(u)); onUserUpdate(u); setShowProfile(false); }} onCancel={() => setShowProfile(false)} /></DialogContent></Dialog>
+      <Dialog open={showProfile} onOpenChange={setShowProfile}><DialogContent className="max-w-6xl max-h-[90vh]"><DialogHeader><DialogTitle>Profile & Resume Data</DialogTitle><DialogDescription>Your data is used as template for AI-generated resumes</DialogDescription></DialogHeader><ProfileEditor user={user} token={token} onSave={(u) => { localStorage.setItem('user', JSON.stringify(u)); onUserUpdate(u); setShowProfile(false); }} onCancel={() => setShowProfile(false)} /></DialogContent></Dialog>
     </div>
   )
 }

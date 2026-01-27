@@ -27,6 +27,20 @@ function handleCORS(response) {
   return response
 }
 
+// Helper function to parse dates (mm/yyyy format)
+function parseDate(dateString) {
+  if (!dateString || dateString.toLowerCase() === 'present') {
+    return new Date() // Current date for "Present"
+  }
+  const parts = dateString.split('/')
+  if (parts.length === 2) {
+    const month = parseInt(parts[0]) - 1
+    const year = parseInt(parts[1])
+    return new Date(year, month)
+  }
+  return new Date(0) // Default to epoch if invalid
+}
+
 async function getAuthUser(request) {
   const authHeader = request.headers.get('Authorization')
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null
@@ -115,6 +129,42 @@ async function handleRoute(request, { params }) {
       const body = await request.json()
       const updatedUser = await updateUserProfile(user.id, body)
       return handleCORS(NextResponse.json({ user: updatedUser }))
+    }
+    
+    // Parse resume PDF
+    if (route === '/auth/parse-resume' && method === 'POST') {
+      const user = await getAuthUser(request)
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      }
+      
+      const body = await request.json()
+      const { base64Content } = body
+      
+      if (!base64Content) {
+        return handleCORS(NextResponse.json({ error: 'Resume content is required' }, { status: 400 }))
+      }
+      
+      try {
+        const { parseResumePDF } = await import('@/lib/gemini')
+        console.log('[API] Parsing resume PDF with Gemini...')
+        const profileData = await parseResumePDF(base64Content)
+        
+        // Sort experiences and education chronologically (most recent first)
+        if (profileData.experiences && profileData.experiences.length > 0) {
+          profileData.experiences.sort((a, b) => {
+            const dateA = parseDate(a.startDate)
+            const dateB = parseDate(b.startDate)
+            return dateB - dateA // Descending order (most recent first)
+          })
+        }
+        
+        console.log('[API] Resume parsed successfully')
+        return handleCORS(NextResponse.json({ profileData }))
+      } catch (error) {
+        console.error('[API] Resume parsing error:', error)
+        return handleCORS(NextResponse.json({ error: 'Failed to parse resume: ' + error.message }, { status: 500 }))
+      }
     }
     
     // Request password reset

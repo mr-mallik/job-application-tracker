@@ -321,10 +321,10 @@ async function handleRoute(request, { params }) {
       }
       
       const body = await request.json()
-      const { documentType, content, jobDescription, userPreferences } = body
+      const { documentType, content, jobDescription, userPreferences, userProfile } = body
       
-      if (!documentType || !content || !jobDescription) {
-        return handleCORS(NextResponse.json({ error: 'documentType, content, and jobDescription are required' }, { status: 400 }))
+      if (!documentType || !jobDescription) {
+        return handleCORS(NextResponse.json({ error: 'documentType and jobDescription are required' }, { status: 400 }))
       }
       
       if (!['resume', 'coverLetter', 'supportingStatement'].includes(documentType)) {
@@ -332,7 +332,7 @@ async function handleRoute(request, { params }) {
       }
       
       try {
-        const refinedContent = await refineDocument(documentType, content, jobDescription, userPreferences)
+        const refinedContent = await refineDocument(documentType, content, jobDescription, userPreferences, userProfile)
         return handleCORS(NextResponse.json({ refinedContent }))
       } catch (error) {
         console.error('Refine error:', error)

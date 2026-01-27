@@ -142,9 +142,9 @@ function ResumePDFPreview({ content, userProfile, maxPages = 2, compact = false 
     if (!header) return null
     return (
       <div className="text-center mb-4 pb-3 border-b-2 border-gray-400">
-        <h1 className="text-xl font-bold uppercase tracking-wider">{header.name}</h1>
-        {header.designation && <p className="text-sm text-gray-600 mt-1">{header.designation}</p>}
-        <div className="flex items-center justify-center gap-3 mt-2 text-xs text-blue-600 flex-wrap">
+        <h1 className="text-xl font-bold uppercase tracking-wider" style={{ fontFamily: 'Inter, sans-serif' }}>{header.name}</h1>
+        {header.designation && <p className="text-sm text-gray-600 mt-1" style={{ fontFamily: 'Inter, sans-serif' }}>{header.designation}</p>}
+        <div className="flex items-center justify-center gap-3 mt-2 text-xs text-blue-600 flex-wrap" style={{ fontFamily: 'Inter, sans-serif' }}>
           {header.email && <a href={`mailto:${header.email}`} className="hover:underline">{header.email}</a>}
           {header.phone && <><span className="text-gray-400">|</span><a href={`tel:${header.phone}`} className="hover:underline">{header.phone}</a></>}
           {header.linkedin && <><span className="text-gray-400">|</span><a href={header.linkedin.startsWith('http') ? header.linkedin : `https://${header.linkedin}`} className="hover:underline">{header.linkedin}</a></>}
@@ -156,8 +156,8 @@ function ResumePDFPreview({ content, userProfile, maxPages = 2, compact = false 
 
   const renderSection = (section) => (
     <div className="mb-4">
-      <h2 className="text-sm font-bold uppercase tracking-wide border-b border-gray-300 pb-1 mb-2">{section.title}</h2>
-      <div className="text-xs leading-relaxed space-y-0.5">
+      <h2 className="text-sm font-bold uppercase tracking-wide border-b border-gray-300 pb-1 mb-2" style={{ fontFamily: 'Inter, sans-serif' }}>{section.title}</h2>
+      <div className="text-xs leading-relaxed space-y-0.5" style={{ fontFamily: 'Inter, sans-serif' }}>
         {section.items.map((item, idx) => {
           const isSubheading = item.startsWith('**') || (item.includes('|') && !item.startsWith('-'))
           const isBullet = item.startsWith('-') || item.startsWith('•')
@@ -178,12 +178,14 @@ function ResumePDFPreview({ content, userProfile, maxPages = 2, compact = false 
     width: '100%',
     minHeight: 280,
     padding: '16px',
-    fontSize: '9px'
+    fontSize: '9px',
+    fontFamily: 'Inter, sans-serif'
   } : {
     width: A4_WIDTH,
     minHeight: A4_HEIGHT,
     padding: '40px',
-    fontSize: '11px'
+    fontSize: '11px',
+    fontFamily: 'Inter, sans-serif'
   }
 
   return (
@@ -262,11 +264,13 @@ function DocumentPDFPreview({ content, maxPages = 2, documentType = 'coverLetter
   const pageStyle = compact ? {
     width: '100%',
     minHeight: 280,
-    padding: '16px'
+    padding: '16px',
+    fontFamily: 'Inter, sans-serif'
   } : {
     width: A4_WIDTH,
     minHeight: A4_HEIGHT,
-    padding: '40px'
+    padding: '40px',
+    fontFamily: 'Inter, sans-serif'
   }
 
   return (
@@ -288,15 +292,22 @@ function DocumentPDFPreview({ content, maxPages = 2, documentType = 'coverLetter
           <div 
             key={pageIndex} 
             className={`bg-white border rounded-lg shadow-md mx-auto ${pageIndex >= maxPages ? 'border-red-300 bg-red-50' : 'border-gray-300'}`}
-            style={{ ...pageStyle, fontFamily: 'Georgia, serif' }}
+            style={{ ...pageStyle }}
           >
             <div className="text-xs text-gray-400 text-right mb-3">Page {pageIndex + 1} of {pages.length}</div>
             <div className={`${compact ? 'text-xs' : 'text-sm'} leading-relaxed space-y-2`}>
-              {pageLines.map((line, lineIndex) => (
-                <p key={lineIndex} className={line.startsWith('#') ? 'font-bold text-base mt-3' : ''}>
-                  {line.replace(/^#+\s*/, '')}
-                </p>
-              ))}
+              {pageLines.map((line, lineIndex) => {
+                const isHeading = line.startsWith('#')
+                const isSubheading = line.startsWith('**') || (line.includes('|') && !line.startsWith('-'))
+                
+                if (isHeading) {
+                  return <p key={lineIndex} className="font-bold text-base mt-3">{line.replace(/^#+\s*/, '')}</p>
+                } else if (isSubheading) {
+                  return <p key={lineIndex} className="font-semibold mt-2">{line.replace(/\*\*/g, '')}</p>
+                } else {
+                  return <p key={lineIndex}>{line}</p>
+                }
+              })}
             </div>
           </div>
         ))}
@@ -554,14 +565,123 @@ function FullScreenDocumentEditor({ job, documentType, token, onUpdate, userProf
     const { jsPDF } = await import('jspdf')
     const doc = new jsPDF()
     const text = showRefined && refinedContent ? refinedContent : content
-    doc.setFontSize(11)
-    const lines = doc.splitTextToSize(text, 170)
+    
     let y = 20
+    const leftMargin = 20
+    const rightMargin = 190
+    const lineHeight = 6
+    const maxY = 280
+    
+    // Helper function to add a new page
+    const checkPageBreak = (requiredSpace = lineHeight) => {
+      if (y + requiredSpace > maxY) {
+        doc.addPage()
+        y = 20
+      }
+    }
+    
+    // Process resume with header if userProfile exists
+    if (documentType === 'resume' && userProfile) {
+      // Header - Name (centered, bold, larger)
+      doc.setFont('helvetica', 'bold')
+      doc.setFontSize(16)
+      const name = userProfile.name || ''
+      doc.text(name, 105, y, { align: 'center' })
+      y += 8
+      
+      // Designation (centered, normal)
+      if (userProfile.designation) {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        doc.text(userProfile.designation, 105, y, { align: 'center' })
+        y += 6
+      }
+      
+      // Contact info (centered, smaller, blue-ish)
+      doc.setFontSize(9)
+      const contactParts = []
+      if (userProfile.email) contactParts.push(userProfile.email)
+      if (userProfile.phone) contactParts.push(userProfile.phone)
+      if (userProfile.linkedin) contactParts.push(userProfile.linkedin)
+      if (userProfile.portfolio) contactParts.push(userProfile.portfolio)
+      const contactLine = contactParts.join(' | ')
+      doc.text(contactLine, 105, y, { align: 'center' })
+      y += 8
+      
+      // Horizontal line
+      doc.setDrawColor(100, 100, 100)
+      doc.line(leftMargin, y, rightMargin, y)
+      y += 8
+    }
+    
+    // Parse and render markdown content
+    const lines = text.split('\n')
+    
     lines.forEach(line => {
-      if (y > 280) { doc.addPage(); y = 20 }
-      doc.text(line, 20, y)
-      y += 6
+      const trimmed = line.trim()
+      if (!trimmed) {
+        y += 3 // Small space for empty lines
+        return
+      }
+      
+      // Main heading (# HEADING or ALL CAPS without special chars)
+      if (trimmed.match(/^#\s+[A-Z]/) || (trimmed === trimmed.toUpperCase() && trimmed.length > 3 && !trimmed.startsWith('-') && !trimmed.startsWith('**'))) {
+        checkPageBreak(10)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(12)
+        const headingText = trimmed.replace(/^#+\s*/, '')
+        doc.text(headingText, leftMargin, y)
+        y += 4
+        // Underline
+        doc.setDrawColor(150, 150, 150)
+        doc.line(leftMargin, y, rightMargin, y)
+        y += 6
+        return
+      }
+      
+      // Sub-heading (** text ** or contains |)
+      if (trimmed.startsWith('**') || (trimmed.includes('|') && !trimmed.startsWith('-'))) {
+        checkPageBreak(8)
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(10)
+        const subheadingText = trimmed.replace(/\*\*/g, '')
+        doc.text(subheadingText, leftMargin, y)
+        y += 6
+        return
+      }
+      
+      // Bullet point
+      if (trimmed.startsWith('-') || trimmed.startsWith('•')) {
+        checkPageBreak(6)
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(10)
+        const bulletText = trimmed.replace(/^[-•]\s*/, '')
+        const wrappedLines = doc.splitTextToSize(bulletText, rightMargin - leftMargin - 8)
+        wrappedLines.forEach((wrappedLine, idx) => {
+          if (idx === 0) {
+            doc.text('•', leftMargin + 3, y)
+            doc.text(wrappedLine, leftMargin + 8, y)
+          } else {
+            checkPageBreak()
+            doc.text(wrappedLine, leftMargin + 8, y)
+          }
+          y += lineHeight
+        })
+        return
+      }
+      
+      // Regular paragraph text
+      checkPageBreak(6)
+      doc.setFont('helvetica', 'normal')
+      doc.setFontSize(10)
+      const wrappedLines = doc.splitTextToSize(trimmed, rightMargin - leftMargin)
+      wrappedLines.forEach(wrappedLine => {
+        checkPageBreak()
+        doc.text(wrappedLine, leftMargin, y)
+        y += lineHeight
+      })
     })
+    
     doc.save(`${job.company}-${config.label}.pdf`)
   }
 
@@ -641,7 +761,7 @@ function FullScreenDocumentEditor({ job, documentType, token, onUpdate, userProf
         {/* Preview Panel - A4 Size with scroll */}
         <div className="w-1/2 flex flex-col bg-gray-100">
           <div className="px-4 py-2 border-b bg-muted/50">
-            <Label className="flex items-center gap-2"><Eye className="w-4 h-4" />A4 PDF Preview (Harvard Style)</Label>
+            <Label className="flex items-center gap-2"><Eye className="w-4 h-4" />A4 PDF Preview (Inter Font)</Label>
           </div>
           <div className="flex-1 overflow-auto p-6">
             {documentType === 'resume' ? (

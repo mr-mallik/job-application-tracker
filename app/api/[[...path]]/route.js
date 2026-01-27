@@ -141,7 +141,7 @@ async function handleRoute(request, { params }) {
 
     // ============ JOB ROUTES ============
     
-    // Scrape job from URL
+    // Scrape job from URL using Playwright + Cheerio + Gemini AI
     if (route === '/jobs/scrape' && method === 'POST') {
       const user = await getAuthUser(request)
       if (!user) {
@@ -156,13 +156,35 @@ async function handleRoute(request, { params }) {
       }
       
       try {
-        const html = await fetchPageContent(url)
-        const textContent = extractTextContent(html)
-        const jobDetails = await extractJobDetailsFromHTML(url, textContent)
+        console.log(`[Scraper] Starting scrape for: ${url}`)
+        const jobBoard = detectJobBoard(url)
+        console.log(`[Scraper] Detected job board: ${jobBoard}`)
         
-        return handleCORS(NextResponse.json({ jobDetails }))
+        // Step 1: Use Playwright to fetch the page (handles JavaScript rendering)
+        console.log('[Scraper] Step 1: Fetching page with Playwright...')
+        const { html, visibleText } = await scrapeWithPlaywright(url)
+        console.log(`[Scraper] Page fetched. HTML length: ${html.length}, Text length: ${visibleText.length}`)
+        
+        // Step 2: Parse with Cheerio to extract structured data
+        console.log('[Scraper] Step 2: Parsing with Cheerio...')
+        const scrapedData = parseWithCheerio(html, url)
+        scrapedData.visibleText = visibleText
+        console.log(`[Scraper] Extracted - Titles: ${scrapedData.possibleTitles.length}, Companies: ${scrapedData.possibleCompanies.length}`)
+        
+        // Step 3: Use Gemini AI to classify and structure the data
+        console.log('[Scraper] Step 3: Classifying with Gemini AI...')
+        const jobDetails = await classifyJobData(scrapedData, url)
+        console.log(`[Scraper] Classification complete. Title: ${jobDetails.title}`)
+        
+        return handleCORS(NextResponse.json({ 
+          jobDetails,
+          meta: {
+            jobBoard,
+            scrapedAt: new Date().toISOString()
+          }
+        }))
       } catch (error) {
-        console.error('Scrape error:', error)
+        console.error('[Scraper] Error:', error)
         return handleCORS(NextResponse.json({ error: 'Failed to extract job details: ' + error.message }, { status: 500 }))
       }
     }

@@ -170,6 +170,8 @@ async function handleRoute(request, { params }) {
         const scrapedData = parseWithCheerio(html, url)
         scrapedData.visibleText = visibleText
         console.log(`[Scraper] Extracted - Titles: ${scrapedData.possibleTitles.length}, Companies: ${scrapedData.possibleCompanies.length}`)
+        console.log('[Scraper] Possible Titles:', JSON.stringify(scrapedData.possibleTitles.slice(0, 5)))
+        console.log('[Scraper] Raw text excerpt:', scrapedData.rawText?.substring(0, 500) || visibleText?.substring(0, 500))
         
         // Step 3: Use Gemini AI to classify and structure the data
         console.log('[Scraper] Step 3: Classifying with Gemini AI...')

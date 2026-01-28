@@ -56,10 +56,13 @@ export function ProfileEditor({ user, token, onSave, onCancel }) {
     }
 
     setParsing(true)
+    toast.info('Parsing resume with AI...', { duration: 2000 })
+    
     try {
       const reader = new FileReader()
       reader.onload = async (event) => {
         try {
+          // Extract base64 content (remove data URL prefix)
           const base64Content = event.target.result.split(',')[1]
           
           const res = await fetch('/api/auth/parse-resume', {
@@ -74,15 +77,22 @@ export function ProfileEditor({ user, token, onSave, onCancel }) {
           const data = await res.json()
           if (!res.ok) throw new Error(data.error)
           
+          // Merge parsed data with existing profile, preserving user's email
           setProfileData({
             ...data.profileData,
-            email: user.email
+            email: user.email // Always preserve the authenticated user's email
           })
           
-          toast.success('Resume imported successfully!')
+          // Clear the file input for future uploads
+          if (fileInputRef.current) {
+            fileInputRef.current.value = ''
+          }
+          
+          toast.success('Resume imported successfully! Review and edit the extracted data.')
           setActiveTab('basic')
         } catch (error) {
-          toast.error(error.message)
+          console.error('Resume parsing error:', error)
+          toast.error(error.message || 'Failed to parse resume')
         } finally {
           setParsing(false)
         }
@@ -93,7 +103,8 @@ export function ProfileEditor({ user, token, onSave, onCancel }) {
       }
       reader.readAsDataURL(file)
     } catch (error) {
-      toast.error(error.message)
+      console.error('File upload error:', error)
+      toast.error(error.message || 'Failed to upload file')
       setParsing(false)
     }
   }
@@ -169,6 +180,7 @@ export function ProfileEditor({ user, token, onSave, onCancel }) {
   }
 
   return (
+    <>
     <div className="flex gap-6 h-[75vh]">
       <div className="w-1/2 overflow-y-auto pr-4">
         <div className="mb-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200">
@@ -289,11 +301,12 @@ export function ProfileEditor({ user, token, onSave, onCancel }) {
         <Label className="flex items-center gap-2 mb-4"><Eye className="w-4 h-4" />A4 Resume Preview</Label>
         <ResumePDFPreview content={generatePreviewContent()} userProfile={profileData} maxPages={2} />
       </div>
-      
-      <div className="absolute bottom-0 left-0 right-0 p-4 bg-background border-t flex justify-end gap-2">
+    
+    </div>
+    <div className="bg-background border-t flex justify-end gap-2">
         <Button variant="outline" onClick={onCancel}>Cancel</Button>
         <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save Profile'}</Button>
-      </div>
     </div>
-  )
+    </>
+)
 }

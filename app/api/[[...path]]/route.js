@@ -320,7 +320,7 @@ async function handleRoute(request, { params }) {
       
       const jobs = await db.collection('jobs')
         .find({ userId: user.id })
-        .sort({ createdAt: -1 })
+        .sort({ closingDate: -1 })
         .toArray()
       
       const cleanJobs = jobs.map(({ _id, ...rest }) => rest)

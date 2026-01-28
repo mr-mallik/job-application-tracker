@@ -62,11 +62,31 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
               <div className="flex items-center gap-2"><h2 className="font-semibold">Applications</h2>{filter !== 'all' && <Badge variant="secondary" className="cursor-pointer" onClick={() => setFilter('all')}>{filter} <X className="w-3 h-3 ml-1" /></Badge>}</div>
               <Button size="sm" onClick={() => setShowAddJob(true)}><Plus className="w-4 h-4 mr-1" />Add</Button>
             </div>
-            {loading ? <div className="text-center py-8"><RefreshCw className="w-6 h-6 mx-auto animate-spin text-muted-foreground" /></div>
-            : filteredJobs.length === 0 ? <Card><CardContent className="py-8 text-center"><Briefcase className="w-10 h-10 mx-auto text-muted-foreground mb-2" /><p className="text-sm">No jobs found</p></CardContent></Card>
+            {loading ? 
+                <div className="text-center py-8">
+                    <RefreshCw className="w-6 h-6 mx-auto animate-spin text-muted-foreground" />
+                </div>
+            : filteredJobs.length === 0 ? 
+                <Card>
+                    <CardContent className="py-8 text-center">
+                        <Briefcase className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
+                        <p className="text-sm">No jobs found</p>
+                    </CardContent>
+                </Card>
             : <div className="space-y-2">{filteredJobs.map(job => (
                 <Card key={job.id} className={`cursor-pointer hover:shadow-md ${selectedJob?.id === job.id ? 'ring-2 ring-primary' : ''}`} onClick={() => setSelectedJob(job)}>
-                  <CardContent className="py-3"><div className="flex justify-between items-start"><div><h3 className="font-medium text-sm">{job.title}</h3><p className="text-xs text-muted-foreground">{job.company} {job.location && `• ${job.location}`}</p></div><Badge className={statusColors[job.status]}>{job.status}</Badge></div></CardContent>
+                    <CardContent className="py-3">
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <h3 className="font-medium text-sm">{job.title}</h3>
+                                <p className="text-xs text-muted-foreground">
+                                    {job.company} {job.location && `• ${job.location}`} 
+                                    <span className='text-red-500'>{job.closingDate && ` • Closing Date: ${job.closingDate}`}</span>
+                                </p>
+                            </div>
+                            <Badge className={statusColors[job.status]}>{job.status}</Badge>
+                        </div>
+                    </CardContent>
                 </Card>
               ))}</div>}
           </div>

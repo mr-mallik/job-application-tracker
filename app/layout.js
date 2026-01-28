@@ -1,6 +1,7 @@
 import './globals.css'
 import { Toaster } from 'sonner'
 import { Inter } from 'next/font/google'
+import Link from 'next/link'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -12,9 +13,16 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={`min-h-screen bg-background ${inter.className}`}>
-        {children}
-        <Toaster position="top-right" richColors />
+      <body className={`min-h-screen bg-background flex flex-col ${inter.className}`}>
+        <div className="flex-1">
+          {children}
+        </div>
+        <footer className="flex justify-center items-center">
+          <Link href="/legal/cookies" className="hover:text-foreground transition-colors px-2">Cookies</Link>
+          <Link href="/legal/privacy" className="hover:text-foreground transition-colors px-2">Privacy</Link>
+          <Link href="/legal/terms" className="hover:text-foreground transition-colors px-2">Terms</Link>
+        </footer>
+        <Toaster position="top-right" richColors />        
       </body>
     </html>
   )

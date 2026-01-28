@@ -1131,6 +1131,8 @@ function ProfileEditor({ user, token, onSave, onCancel }) {
 function JobForm({ job, onSave, onCancel, token, userProfile }) {
   const [loading, setLoading] = useState(false)
   const [scraping, setScraping] = useState(false)
+  const [extractionMode, setExtractionMode] = useState('url') // 'url' or 'text'
+  const [jobDescriptionText, setJobDescriptionText] = useState('')
   const [formData, setFormData] = useState({
     title: job?.title || '', company: job?.company || '', location: job?.location || '',
     salary: job?.salary || '', closingDate: job?.closingDate || '',
@@ -1144,6 +1146,23 @@ function JobForm({ job, onSave, onCancel, token, userProfile }) {
     setScraping(true)
     try {
       const res = await fetch('/api/jobs/scrape', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ url: formData.url }) })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setFormData(prev => ({
+        ...prev, title: data.jobDetails.title || prev.title, company: data.jobDetails.company || prev.company,
+        location: data.jobDetails.location || prev.location, salary: data.jobDetails.salary || prev.salary,
+        closingDate: data.jobDetails.closingDate || prev.closingDate, description: data.jobDetails.description || prev.description,
+        requirements: data.jobDetails.requirements || prev.requirements, benefits: data.jobDetails.benefits || prev.benefits
+      }))
+      toast.success('Extracted!')
+    } catch (error) { toast.error(error.message) } finally { setScraping(false) }
+  }
+
+  const handleExtractFromText = async () => {
+    if (!jobDescriptionText.trim()) { toast.error('Paste job description first'); return }
+    setScraping(true)
+    try {
+      const res = await fetch('/api/jobs/extract-text', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` }, body: JSON.stringify({ text: jobDescriptionText }) })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
       setFormData(prev => ({
@@ -1170,9 +1189,43 @@ function JobForm({ job, onSave, onCancel, token, userProfile }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="flex gap-2">
-        <div className="flex-1"><Label>Job URL</Label><Input placeholder="https://..." value={formData.url} onChange={(e) => setFormData({...formData, url: e.target.value})} /></div>
-        <div className="flex items-end"><Button type="button" variant="outline" onClick={handleScrape} disabled={scraping}>{scraping ? <RefreshCw className="w-4 h-4 animate-spin mr-1" /> : <Sparkles className="w-4 h-4 mr-1" />}{scraping ? 'Extracting...' : 'Extract'}</Button></div>
+      <div className="space-y-3">
+        <div className="flex gap-2 border-b pb-2">
+          <Button type="button" size="sm" variant={extractionMode === 'url' ? 'default' : 'outline'} onClick={() => setExtractionMode('url')}>
+            <ExternalLink className="w-3 h-3 mr-1" />From URL
+          </Button>
+          <Button type="button" size="sm" variant={extractionMode === 'text' ? 'default' : 'outline'} onClick={() => setExtractionMode('text')}>
+            <FileText className="w-3 h-3 mr-1" />Paste Text
+          </Button>
+        </div>
+        
+        {extractionMode === 'url' ? (
+          <div className="flex gap-2">
+            <div className="flex-1"><Label>Job URL</Label><Input placeholder="https://..." value={formData.url} onChange={(e) => setFormData({...formData, url: e.target.value})} /></div>
+            <div className="flex items-end"><Button type="button" variant="outline" onClick={handleScrape} disabled={scraping}>{scraping ? <RefreshCw className="w-4 h-4 animate-spin mr-1" /> : <Sparkles className="w-4 h-4 mr-1" />}{scraping ? 'Extracting...' : 'Extract'}</Button></div>
+          </div>
+        ) : (
+          <>
+          <div>
+            <Label>Job Description</Label>
+            <div className="mt-1 space-y-2">
+              <Textarea 
+                className="min-h-[120px] font-mono text-xs" 
+                placeholder="Paste the full job description here...\n\nInclude:\n- Job title\n- Company name\n- Location\n- Salary (if mentioned)\n- Job description\n- Requirements\n- Benefits\n- Application deadline"
+                value={jobDescriptionText}
+                onChange={(e) => setJobDescriptionText(e.target.value)}
+              />
+              <Button type="button" variant="outline" className="w-full" onClick={handleExtractFromText} disabled={scraping}>
+                {scraping ? <RefreshCw className="w-4 h-4 animate-spin mr-1" /> : <Sparkles className="w-4 h-4 mr-1" />}
+                {scraping ? 'Extracting...' : 'Extract Job Details with AI'}
+              </Button>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1"><Label>Job URL</Label><Input placeholder="https://..." value={formData.url} onChange={(e) => setFormData({...formData, url: e.target.value})} /></div>
+          </div>
+          </>
+        )}
       </div>
       <div className="grid grid-cols-2 gap-4">
         <div><Label>Job Title *</Label><Input value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} required /></div>

@@ -210,10 +210,20 @@ async function handleRoute(request, { params }) {
         const jobBoard = detectJobBoard(url)
         console.log(`[Scraper] Detected job board: ${jobBoard}`)
         
-        // Step 1: Use Playwright to fetch the page (handles JavaScript rendering)
-        console.log('[Scraper] Step 1: Fetching page with Playwright...')
-        const { html, visibleText } = await scrapeWithPlaywright(url)
-        console.log(`[Scraper] Page fetched. HTML length: ${html.length}, Text length: ${visibleText.length}`)
+        // Step 1: Use Browserless to fetch the page (handles JavaScript rendering)
+        console.log('[Scraper] Step 1: Fetching page with Browserless...')
+        const scrapedResult = await scrapeWithPlaywright(url)
+        const { html, visibleText, method } = scrapedResult
+        console.log(`[Scraper] Page fetched using: ${method || 'unknown'}`)
+        console.log(`[Scraper] HTML length: ${html.length}, Text length: ${visibleText.length}`)
+        
+        // Validate we have sufficient content before proceeding
+        if (!html || html.length < 1000 || !visibleText || visibleText.length < 500) {
+          console.error('[Scraper] Insufficient content. Likely an auth page or error.')
+          return handleCORS(NextResponse.json({ 
+            error: 'Unable to extract job details. The URL may require authentication (login), be a search results page instead of a specific job posting, or the page did not load properly. Please try: 1) A direct link to a single job posting, 2) Logging in first and copying the job description text to use "Paste Text" mode instead.'
+          }, { status: 400 }))
+        }
         
         // Step 2: Parse with Cheerio to extract structured data
         console.log('[Scraper] Step 2: Parsing with Cheerio...')
@@ -222,6 +232,20 @@ async function handleRoute(request, { params }) {
         console.log(`[Scraper] Extracted - Titles: ${scrapedData.possibleTitles.length}, Companies: ${scrapedData.possibleCompanies.length}`)
         console.log('[Scraper] Possible Titles:', JSON.stringify(scrapedData.possibleTitles.slice(0, 5)))
         console.log('[Scraper] Raw text excerpt:', scrapedData.rawText?.substring(0, 500) || visibleText?.substring(0, 500))
+        
+        // Validate we have meaningful data before calling Gemini
+        const hasValidData = (
+          (scrapedData.possibleTitles.length > 0 && scrapedData.possibleTitles[0] !== 'Sign in' && scrapedData.possibleTitles[0].length > 5) ||
+          (scrapedData.possibleDescriptions.length > 0 && scrapedData.possibleDescriptions[0].length > 200) ||
+          visibleText.length > 2000
+        )
+        
+        if (!hasValidData) {
+          console.error('[Scraper] No valid job data found. Skipping Gemini call.')
+          return handleCORS(NextResponse.json({ 
+            error: 'No job posting found at this URL. This might be a login page, search results page, or expired listing. Try using "Paste Text" mode instead.'
+          }, { status: 400 }))
+        }
         
         // Step 3: Use Gemini AI to classify and structure the data
         console.log('[Scraper] Step 3: Classifying with Gemini AI...')
@@ -232,11 +256,57 @@ async function handleRoute(request, { params }) {
           jobDetails,
           meta: {
             jobBoard,
-            scrapedAt: new Date().toISOString()
+            scrapedAt: new Date().toISOString(),
+            method: method || 'unknown'
           }
         }))
       } catch (error) {
         console.error('[Scraper] Error:', error)
+        
+        // Provide helpful error messages based on error type
+        let userMessage = error.message
+        if (error.message.includes('authentication') || error.message.includes('Login')) {
+          userMessage = 'This page requires login. Please log in to the job site first, then copy and paste the job description using "Paste Text" mode.'
+        } else if (error.message.includes('validation failed')) {
+          userMessage = 'Unable to extract job details from this page. Try using "Paste Text" mode instead.'
+        }
+        
+        return handleCORS(NextResponse.json({ error: userMessage }, { status: 500 }))
+      }
+    }
+    
+    // Extract job details from pasted text using Gemini AI
+    if (route === '/jobs/extract-text' && method === 'POST') {
+      const user = await getAuthUser(request)
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      }
+      
+      const body = await request.json()
+      const { text } = body
+      
+      if (!text) {
+        return handleCORS(NextResponse.json({ error: 'Job description text is required' }, { status: 400 }))
+      }
+      
+      try {
+        console.log(`[Text Extraction] Starting extraction from pasted text (${text.length} chars)`)
+        
+        // Use Gemini AI to extract structured data from text
+        console.log('[Text Extraction] Extracting with Gemini AI...')
+        const { extractJobDetailsFromText } = await import('@/lib/gemini')
+        const jobDetails = await extractJobDetailsFromText(text)
+        console.log(`[Text Extraction] Extraction complete. Title: ${jobDetails.title}`)
+        
+        return handleCORS(NextResponse.json({ 
+          jobDetails,
+          meta: {
+            extractedAt: new Date().toISOString(),
+            source: 'text'
+          }
+        }))
+      } catch (error) {
+        console.error('[Text Extraction] Error:', error)
         return handleCORS(NextResponse.json({ error: 'Failed to extract job details: ' + error.message }, { status: 500 }))
       }
     }

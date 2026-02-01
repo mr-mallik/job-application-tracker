@@ -22,7 +22,7 @@ export function ProfileEditor({ user, token, onSave, onCancel }) {
     name: user.name || '', designation: user.designation || '', email: user.email || '',
     phone: user.phone || '', linkedin: user.linkedin || '', portfolio: user.portfolio || '',
     summary: user.summary || '', experiences: user.experiences || [],
-    education: user.education || { degree: '', institution: '', location: '', grade: '', startDate: '', endDate: '' },
+    education: Array.isArray(user.education) ? user.education : (user.education?.degree ? [user.education] : []),
     skills: user.skills || { relevant: '', other: '' }, projects: user.projects || [],
     interests: user.interests || [], achievements: user.achievements || ''
   })
@@ -38,6 +38,10 @@ export function ProfileEditor({ user, token, onSave, onCancel }) {
   const addProject = () => setProfileData(prev => ({ ...prev, projects: [...prev.projects, { title: '', url: '', description: '' }] }))
   const updateProject = (i, data) => setProfileData(prev => ({ ...prev, projects: prev.projects.map((p, idx) => idx === i ? data : p) }))
   const removeProject = (i) => setProfileData(prev => ({ ...prev, projects: prev.projects.filter((_, idx) => idx !== i) }))
+  
+  const addEducation = () => setProfileData(prev => ({ ...prev, education: [...prev.education, { degree: '', institution: '', location: '', grade: '', startDate: '', endDate: '' }] }))
+  const updateEducation = (i, data) => setProfileData(prev => ({ ...prev, education: prev.education.map((edu, idx) => idx === i ? data : edu) }))
+  const removeEducation = (i) => setProfileData(prev => ({ ...prev, education: prev.education.filter((_, idx) => idx !== i) }))
   
   const addInterest = () => setProfileData(prev => ({ ...prev, interests: [...prev.interests, { title: '', description: '' }] }))
 
@@ -160,8 +164,11 @@ export function ProfileEditor({ user, token, onSave, onCancel }) {
         content += '\n'
       })
     }
-    if (profileData.education.degree) {
-      content += `# EDUCATION\n**${profileData.education.degree} | ${profileData.education.grade} | ${profileData.education.startDate} - ${profileData.education.endDate}**\n${profileData.education.institution}, ${profileData.education.location}\n\n`
+    if (profileData.education.length > 0) {
+      content += `# EDUCATION\n`
+      profileData.education.forEach(edu => {
+        content += `**${edu.degree} | ${edu.grade} | ${edu.startDate} - ${edu.endDate}**\n${edu.institution}, ${edu.location}\n\n`
+      })
     }
     if (profileData.skills.relevant || profileData.skills.other) {
       content += `# SKILLS\n`
@@ -256,17 +263,33 @@ export function ProfileEditor({ user, token, onSave, onCancel }) {
           </TabsContent>
           
           <TabsContent value="education" className="space-y-3">
-            <h3 className="font-semibold">Education</h3>
-            <Input placeholder="Degree Name" value={profileData.education.degree} onChange={(e) => setProfileData({...profileData, education: {...profileData.education, degree: e.target.value}})} />
-            <Input placeholder="Institution" value={profileData.education.institution} onChange={(e) => setProfileData({...profileData, education: {...profileData.education, institution: e.target.value}})} />
-            <div className="grid grid-cols-2 gap-2">
-              <Input placeholder="Location" value={profileData.education.location} onChange={(e) => setProfileData({...profileData, education: {...profileData.education, location: e.target.value}})} />
-              <Input placeholder="Grade/GPA" value={profileData.education.grade} onChange={(e) => setProfileData({...profileData, education: {...profileData.education, grade: e.target.value}})} />
+            <div className="flex justify-between items-center">
+              <h3 className="font-semibold">Education</h3>
+              <Button size="sm" onClick={addEducation}><Plus className="w-4 h-4 mr-1" />Add</Button>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Input placeholder="Start (mm/yyyy)" value={profileData.education.startDate} onChange={(e) => setProfileData({...profileData, education: {...profileData.education, startDate: e.target.value}})} />
-              <Input placeholder="End (mm/yyyy)" value={profileData.education.endDate} onChange={(e) => setProfileData({...profileData, education: {...profileData.education, endDate: e.target.value}})} />
-            </div>
+            {profileData.education.map((edu, i) => (
+              <Card key={i} className="mb-2">
+                <CardContent className="pt-3 space-y-2">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="text-sm font-medium">Education #{i + 1}</span>
+                    <Button variant="ghost" size="sm" onClick={() => removeEducation(i)}>
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </Button>
+                  </div>
+                  <Input placeholder="Degree Name" value={edu.degree} onChange={(e) => updateEducation(i, {...edu, degree: e.target.value})} />
+                  <Input placeholder="Institution" value={edu.institution} onChange={(e) => updateEducation(i, {...edu, institution: e.target.value})} />
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input placeholder="Location" value={edu.location} onChange={(e) => updateEducation(i, {...edu, location: e.target.value})} />
+                    <Input placeholder="Grade/GPA" value={edu.grade} onChange={(e) => updateEducation(i, {...edu, grade: e.target.value})} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input placeholder="Start (mm/yyyy)" value={edu.startDate} onChange={(e) => updateEducation(i, {...edu, startDate: e.target.value})} />
+                    <Input placeholder="End (mm/yyyy)" value={edu.endDate} onChange={(e) => updateEducation(i, {...edu, endDate: e.target.value})} />
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+            {profileData.education.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No education added</p>}
             <Separator className="my-4" />
             <h3 className="font-semibold">Achievements</h3>
             <Textarea placeholder="Awards, certifications..." className="min-h-[80px]" value={profileData.achievements} onChange={(e) => setProfileData({...profileData, achievements: e.target.value})} />

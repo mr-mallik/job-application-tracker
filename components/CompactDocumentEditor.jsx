@@ -16,7 +16,7 @@ export function CompactDocumentEditor({ job, documentType, token, onUpdate, user
   }
   const config = docConfig[documentType]
   
-  const hasContent = job[documentType]?.content || job[documentType]?.refinedContent
+  const hasContent = job[documentType]?.content || job[documentType]?.refinedContent || job[documentType]?.blockData
 
   if (fullScreen) {
     return (
@@ -29,6 +29,18 @@ export function CompactDocumentEditor({ job, documentType, token, onUpdate, user
         onClose={() => setFullScreen(false)}
       />
     )
+  }
+
+  const getPreviewText = () => {
+    const doc = job[documentType]
+    if (!doc) return ''
+    
+    // For resume with block data, show summary
+    if (documentType === 'resume' && doc.blockData) {
+      return `${doc.blockData.name || ''} - ${doc.blockData.subtitle || ''}\n${doc.blockData.summary || ''}`.substring(0, 500)
+    }
+    
+    return (doc.refinedContent || doc.content || '').substring(0, 500)
   }
 
   return (
@@ -49,7 +61,7 @@ export function CompactDocumentEditor({ job, documentType, token, onUpdate, user
           <CardContent className="py-4">
             <p className="text-sm text-muted-foreground mb-2">Content saved. Click "Open Full Editor" to edit.</p>
             <div className="text-xs font-mono bg-muted p-3 rounded max-h-32 overflow-auto">
-              {(job[documentType]?.refinedContent || job[documentType]?.content || '').substring(0, 500)}...
+              {getPreviewText()}...
             </div>
           </CardContent>
         </Card>

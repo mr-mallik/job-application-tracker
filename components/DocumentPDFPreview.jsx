@@ -47,12 +47,12 @@ export function DocumentPDFPreview({ content, maxPages = 2, documentType = 'cove
 
   const pageStyle = compact ? {
     width: '100%',
-    minHeight: 280,
+    height: 280,
     padding: '16px',
     fontFamily: 'Inter, sans-serif'
   } : {
     width: A4_WIDTH,
-    minHeight: A4_HEIGHT,
+    height: A4_HEIGHT,
     padding: '40px',
     fontFamily: 'Inter, sans-serif'
   }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { getResumeMarkdown } from '@/lib/currentresume.js'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,14 +20,22 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
   }
   const config = docConfig[documentType]
   
-  const [content, setContent] = useState(job[documentType]?.content || '')
+  const [content, setContent] = useState(() => {
+    if (job[documentType]?.content) return job[documentType].content
+    if (documentType === 'resume' && userProfile) return getResumeMarkdown(userProfile)
+    return ''
+  })
   const [refinedContent, setRefinedContent] = useState(job[documentType]?.refinedContent || '')
+  const [blockData, setBlockData] = useState(job[documentType]?.blockData || null)
   const [preferences, setPreferences] = useState('')
   const [refining, setRefining] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showRefined, setShowRefined] = useState(false)
 
-  const previewContent = showRefined && refinedContent ? refinedContent : content
+  // For resume with block data, use that; otherwise fall back to refined/content
+  const previewContent = documentType === 'resume' && blockData 
+    ? blockData 
+    : (showRefined && refinedContent ? refinedContent : content)
 
   const handleRefine = async () => {
     if (!content && documentType !== 'resume') {
@@ -53,7 +62,15 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      setRefinedContent(data.refinedContent)
+      
+      // For resume, store both blockData and refinedContent
+      if (documentType === 'resume' && data.blockData) {
+        setBlockData(data.blockData)
+        setRefinedContent(data.refinedContent)
+      } else {
+        setRefinedContent(data.refinedContent)
+      }
+      
       setShowRefined(true)
       toast.success('Refined!')
     } catch (error) { toast.error(error.message) } finally { setRefining(false) }
@@ -62,10 +79,14 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
   const handleSave = async () => {
     setSaving(true)
     try {
+      const payload = documentType === 'resume' 
+        ? { [documentType]: { content, refinedContent, blockData } }
+        : { [documentType]: { content, refinedContent } }
+        
       const res = await fetch(`/api/jobs/${job.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-        body: JSON.stringify({ [documentType]: { content, refinedContent } })
+        body: JSON.stringify(payload)
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
@@ -77,7 +98,14 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
   const downloadPdf = async () => {
     const { jsPDF } = await import('jspdf')
     const doc = new jsPDF()
-    const text = showRefined && refinedContent ? refinedContent : content
+    
+    // For resume with block data, convert to readable text
+    let text = ''
+    if (documentType === 'resume' && blockData) {
+      text = convertBlockDataToText(blockData)
+    } else {
+      text = showRefined && refinedContent ? refinedContent : content
+    }
     
     let y = 20
     const leftMargin = 20
@@ -186,8 +214,59 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
     doc.save(`${job.company}-${config.label}.pdf`)
   }
 
+  // Helper to convert block data to markdown for editing
+  const convertBlockDataToMarkdown = (data) => {
+    let md = ''
+    if (data.summary) md += `# SUMMARY\n${data.summary}\n\n`
+    if (data.experiences) {
+      md += `# EXPERIENCE\n`
+      data.experiences.forEach(exp => {
+        md += `**${exp.title} | ${exp.company}, ${exp.location} | ${exp.startDate} - ${exp.endDate}**\n`
+        if (exp.achievements) md += `${exp.achievements}\n`
+        md += '\n'
+      })
+    }
+    if (data.education) {
+      md += `# EDUCATION\n`
+      data.education.forEach(edu => {
+        md += `**${edu.degree} | ${edu.grade} | ${edu.startDate} - ${edu.endDate}**\n${edu.institution}, ${edu.location}\n\n`
+      })
+    }
+    if (data.skills) {
+      md += `# SKILLS\n**Technical:** ${data.skills.technical || data.skills.relevant || ''}\n**Other:** ${data.skills.other || ''}\n\n`
+    }
+    return md
+  }
+
+  // Helper to convert block data to plain text for PDF
+  const convertBlockDataToText = (data) => {
+    let text = `${data.name || ''}\n${data.subtitle || ''}\n\n`
+    if (data.summary) text += `SUMMARY\n${data.summary}\n\n`
+    if (data.experiences) {
+      text += `EXPERIENCE\n`
+      data.experiences.forEach(exp => {
+        text += `${exp.title} | ${exp.company}, ${exp.location} | ${exp.startDate} - ${exp.endDate}\n`
+        if (exp.achievements) text += `${exp.achievements}\n`
+        text += '\n'
+      })
+    }
+    if (data.education) {
+      text += `EDUCATION\n`
+      data.education.forEach(edu => {
+        text += `${edu.degree} | ${edu.institution} | ${edu.startDate} - ${edu.endDate}\n`
+      })
+      text += '\n'
+    }
+    return text
+  }
+
   const useRefinedContent = () => {
-    setContent(refinedContent)
+    if (documentType === 'resume' && blockData) {
+      setContent(convertBlockDataToMarkdown(blockData))
+      setBlockData(null)
+    } else {
+      setContent(refinedContent)
+    }
     setRefinedContent('')
     setShowRefined(false)
     toast.success('Applied')

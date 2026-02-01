@@ -351,7 +351,12 @@ async function handleRoute(request, { params }) {
         benefits: body.benefits || '',
         notes: body.notes || '',
         rejectionFeedback: '',
-        resume: { content: '', refinedContent: '' },
+        resume: { 
+          content: '', 
+          refinedContent: '', 
+          blockData: null,
+          template: 'harvard'
+        },
         coverLetter: { content: '', refinedContent: '' },
         supportingStatement: { content: '', refinedContent: '' },
         createdAt: new Date(),
@@ -453,6 +458,16 @@ async function handleRoute(request, { params }) {
       
       try {
         const refinedContent = await refineDocument(documentType, content, jobDescription, userPreferences, userProfile)
+        
+        // For resume, refinedContent is structured JSON, return both refinedContent and blockData
+        if (documentType === 'resume') {
+          return handleCORS(NextResponse.json({ 
+            refinedContent: refinedContent, // The structured block data
+            blockData: refinedContent // Same data, kept for backwards compatibility
+          }))
+        }
+        
+        // For other documents, return markdown as before
         return handleCORS(NextResponse.json({ refinedContent }))
       } catch (error) {
         console.error('Refine error:', error)

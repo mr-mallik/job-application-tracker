@@ -202,193 +202,422 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
 
   const downloadPdf = async () => {
     try {
-      // For resume, generate text-based PDF from blocks
       if (documentType === 'resume' && blocks) {
         const { jsPDF } = await import('jspdf')
         const doc = new jsPDF()
         
-        let y = 20
-        const leftMargin = 20
-        const rightMargin = 190
-        const lineHeight = 6
-        const maxY = 280
-        
-        const checkPageBreak = (requiredSpace = lineHeight) => {
-          if (y + requiredSpace > maxY) {
-            doc.addPage()
-            y = 20
-          }
-        }
-        
-        // Header - Name and contact
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(20)
-        doc.text(blocks.name || '', 105, y, { align: 'center' })
-        y += 8
-        
-        if (blocks.subtitle) {
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(11)
-          doc.text(blocks.subtitle, 105, y, { align: 'center' })
-          y += 6
-        }
-        
-        // Contact info
-        doc.setFontSize(9)
-        const contactParts = []
-        if (blocks.email) contactParts.push(blocks.email)
-        if (blocks.phone) contactParts.push(blocks.phone)
-        if (blocks.location) contactParts.push(blocks.location)
-        if (contactParts.length > 0) {
-          doc.text(contactParts.join(' | '), 105, y, { align: 'center' })
-          y += 10
-        }
-        
-        // Summary
-        if (blocks.summary) {
-          checkPageBreak(15)
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(14)
-          doc.text('SUMMARY', leftMargin, y)
-          y += 2
-          doc.setDrawColor(0)
-          doc.line(leftMargin, y, rightMargin, y)
-          y += 6
+        // Template-specific rendering
+        if (template === '2columns') {
+          // 2 COLUMNS TEMPLATE
+          let y = 20
+          const leftColX = 15
+          const leftColWidth = 60
+          const rightColX = 80
+          const rightColWidth = 115
+          const lineHeight = 5
           
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(10)
-          const summaryLines = doc.splitTextToSize(blocks.summary, rightMargin - leftMargin)
-          summaryLines.forEach(line => {
-            checkPageBreak()
-            doc.text(line, leftMargin, y)
-            y += lineHeight
-          })
-          y += 4
-        }
-        
-        // Experience
-        if (blocks.experiences && blocks.experiences.length > 0) {
-          checkPageBreak(15)
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(14)
-          doc.text('EXPERIENCE', leftMargin, y)
-          y += 2
-          doc.line(leftMargin, y, rightMargin, y)
-          y += 6
-          
-          blocks.experiences.forEach((exp, idx) => {
-            checkPageBreak(20)
-            
-            // Job title and dates (bold)
-            doc.setFont('helvetica', 'bold')
-            doc.setFontSize(11)
-            doc.text(exp.title || '', leftMargin, y)
-            doc.text(`${exp.startDate || ''} - ${exp.endDate || ''}`, rightMargin, y, { align: 'right' })
-            y += 6
-            
-            // Company and location
-            doc.setFont('helvetica', 'normal')
-            doc.setFontSize(10)
-            doc.text(exp.company || '', leftMargin, y)
-            doc.text(exp.location || '', rightMargin, y, { align: 'right' })
-            y += 6
-            
-            // Achievements
-            if (exp.achievements) {
-              const achievements = exp.achievements.split('\n').filter(a => a.trim() && !a.trim().startsWith('#'))
-              achievements.forEach(achievement => {
-                checkPageBreak(8)
-                const cleanText = achievement.trim().replace(/^[-•*]\s*/, '')
-                const wrappedLines = doc.splitTextToSize(cleanText, rightMargin - leftMargin - 8)
-                wrappedLines.forEach((line, lineIdx) => {
-                  if (lineIdx === 0) {
-                    doc.text('•', leftMargin + 2, y)
-                    doc.text(line, leftMargin + 8, y)
-                  } else {
-                    checkPageBreak()
-                    doc.text(line, leftMargin + 8, y)
-                  }
-                  y += lineHeight
-                })
-              })
+          const checkPageBreak = (space = lineHeight) => {
+            if (y + space > 280) {
+              doc.addPage()
+              y = 20
             }
-            y += 3
-          })
-          y += 2
-        }
-        
-        // Education
-        if (blocks.education && blocks.education.length > 0) {
-          checkPageBreak(15)
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(14)
-          doc.text('EDUCATION', leftMargin, y)
-          y += 2
-          doc.line(leftMargin, y, rightMargin, y)
-          y += 6
+          }
           
-          blocks.education.forEach(edu => {
-            checkPageBreak(12)
+          // Header
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(20)
+          doc.text(blocks.name?.toUpperCase() || '', 15, y)
+          y += 7
+          
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          doc.setTextColor(61, 126, 255)
+          if (blocks.subtitle) {
+            doc.text(blocks.subtitle, 15, y)
+            y += 5
+          }
+          
+          doc.setTextColor(102, 102, 102)
+          doc.setFontSize(9)
+          const contact2col = [blocks.email, blocks.linkedin ? 'LinkedIn' : '', blocks.phone, blocks.location].filter(Boolean).join(' • ')
+          doc.text(contact2col, 15, y)
+          y += 10
+          
+          doc.setTextColor(0, 0, 0)
+          
+          // LEFT COLUMN - Achievements, Skills, Courses
+          let leftY = y
+          
+          if (blocks.achievements?.length > 0) {
+            doc.setFontSize(9)
+            doc.setTextColor(102, 102, 102)
+            doc.text('KEY ACHIEVEMENTS', leftColX, leftY)
+            leftY += 3
+            doc.setDrawColor(191, 198, 209)
+            doc.setLineWidth(0.5)
+            doc.line(leftColX, leftY, leftColX + leftColWidth, leftY)
+            leftY += 5
+            
+            blocks.achievements.slice(0, 4).forEach(ach => {
+              doc.setFontSize(10)
+              doc.setFont('helvetica', 'bold')
+              doc.setTextColor(10, 62, 161)
+              const titleLines = doc.splitTextToSize(ach.title || '', leftColWidth - 5)
+              titleLines.forEach(line => {
+                doc.text(line, leftColX, leftY)
+                leftY += 4
+              })
+              
+              doc.setFont('helvetica', 'normal')
+              doc.setFontSize(9)
+              doc.setTextColor(85, 85, 85)
+              const descLines = doc.splitTextToSize(ach.description || '', leftColWidth - 5)
+              descLines.forEach(line => {
+                doc.text(line, leftColX, leftY)
+                leftY += 4
+              })
+              leftY += 3
+            })
+          }
+          
+          if (blocks.skills?.technical || blocks.skills?.relevant || blocks.skills?.other) {
+            leftY += 5
+            doc.setFontSize(9)
+            doc.setTextColor(102, 102, 102)
+            doc.text('SKILLS', leftColX, leftY)
+            leftY += 3
+            doc.line(leftColX, leftY, leftColX + leftColWidth, leftY)
+            leftY += 5
+            
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(9)
+            doc.setTextColor(10, 62, 161)
+            const allSkills2col = [blocks.skills.technical, blocks.skills.relevant, blocks.skills.other].filter(Boolean).join(', ')
+            const skillLines2col = doc.splitTextToSize(allSkills2col, leftColWidth)
+            skillLines2col.forEach(line => {
+              doc.text(line, leftColX, leftY)
+              leftY += 4
+            })
+          }
+          
+          if (blocks.courses?.length > 0) {
+            leftY += 5
+            doc.setFontSize(9)
+            doc.setTextColor(102, 102, 102)
+            doc.text('TRAINING / COURSES', leftColX, leftY)
+            leftY += 3
+            doc.line(leftColX, leftY, leftColX + leftColWidth, leftY)
+            leftY += 5
+            
+            blocks.courses.forEach(course => {
+              doc.setFont('helvetica', 'bold')
+              doc.setFontSize(9)
+              doc.setTextColor(61, 126, 255)
+              doc.text(course.title || '', leftColX, leftY)
+              leftY += 4
+              
+              doc.setFont('helvetica', 'normal')
+              doc.setTextColor(0, 0, 0)
+              doc.text(course.provider || 'Online', leftColX, leftY)
+              leftY += 6
+            })
+          }
+          
+          // RIGHT COLUMN - Summary, Experience, Education
+          let rightY = y
+          doc.setTextColor(0, 0, 0)
+          
+          if (blocks.summary) {
+            doc.setFontSize(9)
+            doc.setTextColor(102, 102, 102)
+            doc.text('SUMMARY', rightColX, rightY)
+            rightY += 3
+            doc.line(rightColX, rightY, rightColX + rightColWidth, rightY)
+            rightY += 5
+            
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(10)
+            doc.setTextColor(68, 68, 68)
+            const summaryLines2col = doc.splitTextToSize(blocks.summary, rightColWidth)
+            summaryLines2col.forEach(line => {
+              doc.text(line, rightColX, rightY)
+              rightY += 5
+            })
+            rightY += 3
+          }
+          
+          if (blocks.experiences?.length > 0) {
+            doc.setFontSize(9)
+            doc.setTextColor(102, 102, 102)
+            doc.text('EXPERIENCE', rightColX, rightY)
+            rightY += 3
+            doc.line(rightColX, rightY, rightColX + rightColWidth, rightY)
+            rightY += 5
+            
+            blocks.experiences.forEach(exp => {
+              doc.setFont('helvetica', 'bold')
+              doc.setFontSize(11)
+              doc.setTextColor(10, 62, 161)
+              doc.text(exp.title || '', rightColX, rightY)
+              rightY += 5
+              
+              doc.setFont('helvetica', 'normal')
+              doc.setFontSize(10)
+              doc.setTextColor(61, 126, 255)
+              doc.text(exp.company || '', rightColX, rightY)
+              rightY += 4
+              
+              doc.setFontSize(8)
+              doc.setTextColor(119, 119, 119)
+              doc.text(`${exp.startDate || ''} – ${exp.endDate || ''} | ${exp.location || ''}`, rightColX, rightY)
+              rightY += 5
+              
+              if (exp.achievements) {
+                doc.setFont('helvetica', 'normal')
+                doc.setFontSize(10)
+                doc.setTextColor(0, 0, 0)
+                const achievements = exp.achievements.split('\n').filter(a => a.trim() && !a.startsWith('#'))
+                achievements.forEach(ach => {
+                  const cleanAch = ach.trim().replace(/^[-•*]\s*/, '')
+                  const achLines = doc.splitTextToSize(cleanAch, rightColWidth - 5)
+                  achLines.forEach((line, idx) => {
+                    if (idx === 0) {
+                      doc.text('•', rightColX, rightY)
+                      doc.text(line, rightColX + 5, rightY)
+                    } else {
+                      doc.text(line, rightColX + 5, rightY)
+                    }
+                    rightY += 4
+                  })
+                })
+              }
+              rightY += 3
+            })
+          }
+          
+          if (blocks.education?.length > 0) {
+            doc.setFontSize(9)
+            doc.setTextColor(102, 102, 102)
+            doc.text('EDUCATION', rightColX, rightY)
+            rightY += 3
+            doc.line(rightColX, rightY, rightColX + rightColWidth, rightY)
+            rightY += 5
+            
+            blocks.education.forEach(edu => {
+              doc.setFont('helvetica', 'bold')
+              doc.setFontSize(10)
+              doc.setTextColor(0, 0, 0)
+              doc.text(`${edu.degree || ''}${edu.grade ? ` (${edu.grade})` : ''}`, rightColX, rightY)
+              rightY += 5
+              
+              doc.setFont('helvetica', 'normal')
+              doc.text(`${edu.institution || ''} (${edu.startDate || ''} – ${edu.endDate || ''})`, rightColX, rightY)
+              rightY += 6
+            })
+          }
+          
+        } else {
+          // HARVARD TEMPLATE (default)
+          let y = 20
+          const leftMargin = 20
+          const rightMargin = 190
+          const lineHeight = 5
+          
+          const checkPageBreak = (space = lineHeight) => {
+            if (y + space > 280) {
+              doc.addPage()
+              y = 20
+            }
+          }
+          
+          // Header
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(22)
+          doc.text(blocks.name || '', 105, y, { align: 'center' })
+          y += 7
+          
+          if (blocks.subtitle) {
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(10)
+            doc.setTextColor(85, 85, 85)
+            doc.text(blocks.subtitle, 105, y, { align: 'center' })
+            y += 5
+          }
+          
+          doc.setFontSize(9)
+          const contactParts = [blocks.email, blocks.linkedin ? 'LinkedIn' : '', blocks.phone, blocks.location].filter(Boolean).join(' • ')
+          doc.text(contactParts, 105, y, { align: 'center' })
+          y += 10
+          
+          doc.setTextColor(0, 0, 0)
+          
+          // Summary
+          if (blocks.summary) {
+            checkPageBreak(15)
             doc.setFont('helvetica', 'bold')
-            doc.setFontSize(11)
-            const degreeText = `${edu.degree || ''}${edu.grade ? ` (${edu.grade})` : ''}`
-            doc.text(degreeText, leftMargin, y)
+            doc.setFontSize(13)
+            doc.text('Summary', leftMargin, y)
+            y += 2
+            doc.setLineWidth(0.3)
+            doc.line(leftMargin, y, rightMargin, y)
             y += 6
             
             doc.setFont('helvetica', 'normal')
             doc.setFontSize(10)
-            doc.text(edu.institution || '', leftMargin, y)
-            doc.text(`${edu.startDate || ''} - ${edu.endDate || ''}`, rightMargin, y, { align: 'right' })
-            y += 8
-          })
-          y += 2
-        }
-        
-        // Skills
-        if (blocks.skills && (blocks.skills.technical || blocks.skills.relevant || blocks.skills.other)) {
-          checkPageBreak(15)
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(14)
-          doc.text('SKILLS', leftMargin, y)
-          y += 2
-          doc.line(leftMargin, y, rightMargin, y)
-          y += 6
-          
-          doc.setFont('helvetica', 'normal')
-          doc.setFontSize(10)
-          const allSkills = [blocks.skills.technical, blocks.skills.relevant, blocks.skills.other]
-            .filter(Boolean)
-            .join(' · ')
-          const skillLines = doc.splitTextToSize(allSkills, rightMargin - leftMargin)
-          skillLines.forEach(line => {
-            checkPageBreak()
-            doc.text(line, leftMargin, y)
-            y += lineHeight
-          })
-          y += 4
-        }
-        
-        // Courses
-        if (blocks.courses && blocks.courses.length > 0) {
-          checkPageBreak(15)
-          doc.setFont('helvetica', 'bold')
-          doc.setFontSize(14)
-          doc.text('TRAINING / COURSES', leftMargin, y)
-          y += 2
-          doc.line(leftMargin, y, rightMargin, y)
-          y += 6
-          
-          blocks.courses.forEach(course => {
-            checkPageBreak(8)
-            doc.setFont('helvetica', 'bold')
-            doc.setFontSize(10)
-            doc.text(`• ${course.title}`, leftMargin + 2, y)
+            const summaryLines = doc.splitTextToSize(blocks.summary, rightMargin - leftMargin)
+            summaryLines.forEach(line => {
+              checkPageBreak()
+              doc.text(line, leftMargin, y)
+              y += lineHeight
+            })
             y += 5
-            doc.setFont('helvetica', 'normal')
-            doc.text(`  ${course.provider || 'Online'}`, leftMargin + 2, y)
+          }
+          
+          // Experience
+          if (blocks.experiences?.length > 0) {
+            checkPageBreak(15)
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(13)
+            doc.text('Experience', leftMargin, y)
+            y += 2
+            doc.line(leftMargin, y, rightMargin, y)
             y += 6
-          })
-          y += 2
+            
+            blocks.experiences.forEach(exp => {
+              checkPageBreak(20)
+              
+              // Title and dates on same line
+              doc.setFont('helvetica', 'bold')
+              doc.setFontSize(11)
+              doc.text(exp.title || '', leftMargin, y)
+              doc.text(`${exp.startDate || ''} – ${exp.endDate || ''}`, rightMargin, y, { align: 'right' })
+              y += 5
+              
+              // Company and location on another line
+              doc.setFont('helvetica', 'normal')
+              doc.setFontSize(10)
+              doc.text(exp.company || '', leftMargin, y)
+              if (exp.location) {
+                doc.text(exp.location, rightMargin, y, { align: 'right' })
+              }
+              y += 5
+              
+              // Achievements
+              if (exp.achievements) {
+                const achievements = exp.achievements.split('\n').filter(a => a.trim() && !a.startsWith('#'))
+                achievements.forEach(ach => {
+                  checkPageBreak(8)
+                  const cleanAch = ach.trim().replace(/^[-•*]\s*/, '')
+                  const achLines = doc.splitTextToSize(cleanAch, rightMargin - leftMargin - 8)
+                  achLines.forEach((line, idx) => {
+                    if (idx === 0) {
+                      doc.text('•', leftMargin + 2, y)
+                      doc.text(line, leftMargin + 8, y)
+                    } else {
+                      checkPageBreak()
+                      doc.text(line, leftMargin + 8, y)
+                    }
+                    y += lineHeight
+                  })
+                })
+              }
+              y += 4
+            })
+          }
+          
+          // Education
+          if (blocks.education?.length > 0) {
+            checkPageBreak(15)
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(13)
+            doc.text('Education', leftMargin, y)
+            y += 2
+            doc.line(leftMargin, y, rightMargin, y)
+            y += 6
+            
+            blocks.education.forEach(edu => {
+              checkPageBreak(10)
+              doc.setFont('helvetica', 'bold')
+              doc.setFontSize(10)
+              const degreeText = `${edu.degree || ''}${edu.grade ? ` (${edu.grade})` : ''} — ${edu.institution || ''}`
+              doc.text(degreeText, leftMargin, y)
+              doc.text(`${edu.startDate || ''} – ${edu.endDate || ''}`, rightMargin, y, { align: 'right' })
+              y += 6
+            })
+            y += 3
+          }
+          
+          // Skills
+          if (blocks.skills?.technical || blocks.skills?.relevant || blocks.skills?.other) {
+            checkPageBreak(15)
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(13)
+            doc.text('Skills', leftMargin, y)
+            y += 2
+            doc.line(leftMargin, y, rightMargin, y)
+            y += 6
+            
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(10)
+            const allSkills = [blocks.skills.technical, blocks.skills.relevant, blocks.skills.other].filter(Boolean).join(' · ')
+            const skillLines = doc.splitTextToSize(allSkills, rightMargin - leftMargin)
+            skillLines.forEach(line => {
+              checkPageBreak()
+              doc.text(line, leftMargin, y)
+              y += lineHeight
+            })
+            y += 3
+          }
+          
+          // Courses
+          if (blocks.courses?.length > 0) {
+            checkPageBreak(15)
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(13)
+            doc.text('Training / Courses', leftMargin, y)
+            y += 2
+            doc.line(leftMargin, y, rightMargin, y)
+            y += 6
+            
+            blocks.courses.forEach(course => {
+              checkPageBreak(8)
+              doc.setFont('helvetica', 'bold')
+              doc.setFontSize(10)
+              doc.text(`• ${course.title}`, leftMargin + 2, y)
+              y += 5
+              doc.setFont('helvetica', 'normal')
+              doc.text(`  ${course.provider || 'Online'}`, leftMargin + 2, y)
+              y += 6
+            })
+          }
+          
+          // Achievements
+          if (blocks.achievements?.length > 0) {
+            checkPageBreak(15)
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(13)
+            doc.text('Key Achievements', leftMargin, y)
+            y += 2
+            doc.line(leftMargin, y, rightMargin, y)
+            y += 6
+            
+            blocks.achievements.slice(0, 3).forEach(ach => {
+              checkPageBreak(10)
+              doc.setFont('helvetica', 'bold')
+              doc.setFontSize(10)
+              doc.text(ach.title || '', leftMargin, y)
+              y += 5
+              
+              doc.setFont('helvetica', 'normal')
+              const descLines = doc.splitTextToSize(ach.description || '', rightMargin - leftMargin)
+              descLines.forEach(line => {
+                checkPageBreak()
+                doc.text(line, leftMargin, y)
+                y += lineHeight
+              })
+              y += 4
+            })
+          }
         }
         
         doc.save(`${job.company}-${config.label}.pdf`)

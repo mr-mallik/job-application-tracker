@@ -337,6 +337,24 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
       toast.error('Failed to generate PDF')
     }
   }
+  return (
+    if (data.experiences) {
+      text += `EXPERIENCE\n`
+      data.experiences.forEach(exp => {
+        text += `${exp.title} | ${exp.company}, ${exp.location} | ${exp.startDate} - ${exp.endDate}\n`
+        if (exp.achievements) text += `${exp.achievements}\n`
+        text += '\n'
+      })
+    }
+    if (data.education) {
+      text += `EDUCATION\n`
+      data.education.forEach(edu => {
+        text += `${edu.degree} | ${edu.institution} | ${edu.startDate} - ${edu.endDate}\n`
+      })
+      text += '\n'
+    }
+    return text
+  }
 
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col">

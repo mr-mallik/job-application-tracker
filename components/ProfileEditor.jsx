@@ -16,6 +16,7 @@ import {
 import { ExperienceEntry } from './ExperienceEntry'
 import { ProjectEntry } from './ProjectEntry'
 import { ResumePDFPreview } from './ResumePDFPreview'
+import { profileToBlocks } from '@/lib/blockConverters'
 
 export function ProfileEditor({ user, token, onSave, onCancel }) {
   const [profileData, setProfileData] = useState({
@@ -322,7 +323,11 @@ export function ProfileEditor({ user, token, onSave, onCancel }) {
       
       <div className="w-1/2 border-l pl-6 overflow-y-auto">
         <Label className="flex items-center gap-2 mb-4"><Eye className="w-4 h-4" />A4 Resume Preview</Label>
-        <ResumePDFPreview content={generatePreviewContent()} userProfile={profileData} maxPages={2} />
+        <ResumePDFPreview 
+          content={{ blocks: profileToBlocks(profileData), template: 'harvard' }} 
+          userProfile={profileData} 
+          maxPages={2} 
+        />
       </div>
     
     </div>

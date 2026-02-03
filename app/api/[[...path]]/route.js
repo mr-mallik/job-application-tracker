@@ -352,10 +352,8 @@ async function handleRoute(request, { params }) {
         notes: body.notes || '',
         rejectionFeedback: '',
         resume: { 
-          content: '', 
-          refinedContent: '', 
-          blockData: null,
-          template: 'harvard'
+          blocks: null,
+          template: 'harvard' // Default template
         },
         coverLetter: { content: '', refinedContent: '' },
         supportingStatement: { content: '', refinedContent: '' },
@@ -401,7 +399,15 @@ async function handleRoute(request, { params }) {
       
       for (const field of allowedFields) {
         if (body[field] !== undefined) {
-          updates[field] = body[field]
+          // Special handling for resume to ensure proper structure
+          if (field === 'resume') {
+            updates[field] = {
+              blocks: body[field].blocks || null,
+              template: body[field].template || 'harvard'
+            }
+          } else {
+            updates[field] = body[field]
+          }
         }
       }
       
@@ -452,18 +458,13 @@ async function handleRoute(request, { params }) {
         return handleCORS(NextResponse.json({ error: 'documentType and jobDescription are required' }, { status: 400 }))
       }
       
-      if (!['resume', 'coverLetter', 'supportingStatement'].includes(documentType)) {
-        return handleCORS(NextResponse.json({ error: 'Invalid document type' }, { status: 400 }))
-      }
-      
       try {
         const refinedContent = await refineDocument(documentType, content, jobDescription, userPreferences, userProfile)
         
-        // For resume, refinedContent is structured JSON, return both refinedContent and blockData
+        // For resume, refinedContent is structured JSON blocks
         if (documentType === 'resume') {
           return handleCORS(NextResponse.json({ 
-            refinedContent: refinedContent, // The structured block data
-            blockData: refinedContent // Same data, kept for backwards compatibility
+            blocks: refinedContent // Return refined blocks
           }))
         }
         

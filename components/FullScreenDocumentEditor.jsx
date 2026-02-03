@@ -26,20 +26,7 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
   
   // For resumes: use blocks system (new architecture)
   // For other docs: use markdown content (existing)
-  const [blocks, setBlocks] = useState(() => {
-    if (documentType === 'resume') {
-      return job[documentType]?.blocks || null
-    }
-    return null
-  })
-  
-  const [template, setTemplate] = useState(() => {
-    if (documentType === 'resume') {
-      return job[documentType]?.template || 'harvard'
-    }
-    return null
-  })
-  
+  // Initialize content first
   const [content, setContent] = useState(() => {
     // For resume with blocks: convert to markdown
     if (documentType === 'resume' && job[documentType]?.blocks) {
@@ -50,6 +37,32 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
     // Fallback: generate from profile
     if (documentType === 'resume' && userProfile) return getResumeMarkdown(userProfile)
     return ''
+  })
+  
+  const [blocks, setBlocks] = useState(() => {
+    if (documentType === 'resume') {
+      // If we have blocks, use them
+      if (job[documentType]?.blocks) {
+        return job[documentType].blocks
+      }
+      // Otherwise, parse from content if available
+      if (job[documentType]?.content) {
+        return markdownToBlocks(job[documentType].content)
+      }
+      // Or parse from profile
+      if (userProfile) {
+        const profileMarkdown = getResumeMarkdown(userProfile)
+        return markdownToBlocks(profileMarkdown)
+      }
+    }
+    return null
+  })
+  
+  const [template, setTemplate] = useState(() => {
+    if (documentType === 'resume') {
+      return job[documentType]?.template || 'harvard'
+    }
+    return null
   })
   
   const [refinedContent, setRefinedContent] = useState(job[documentType]?.refinedContent || '')
@@ -128,7 +141,7 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({
           documentType,
-          content: documentType === 'resume' ? JSON.stringify(blocks || userProfile) : content,
+          content: documentType === 'resume' ? JSON.stringify(userProfile) : content,
           jobDescription: job.description + '\n\nRequirements:\n' + job.requirements,
           userPreferences: preferences,
           userProfile: documentType === 'resume' ? userProfile : null
@@ -189,34 +202,196 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
 
   const downloadPdf = async () => {
     try {
-      // For resume, use HTML template rendering
+      // For resume, generate text-based PDF from blocks
       if (documentType === 'resume' && blocks) {
-        const html2pdf = (await import('html2pdf.js')).default
+        const { jsPDF } = await import('jspdf')
+        const doc = new jsPDF()
         
-        // Build HTML from template using shared renderer
-        const htmlContent = renderTemplate(template, blocks)
+        let y = 20
+        const leftMargin = 20
+        const rightMargin = 190
+        const lineHeight = 6
+        const maxY = 280
         
-        // Create temporary container
-        const container = document.createElement('div')
-        container.innerHTML = htmlContent
-        container.style.position = 'absolute'
-        container.style.left = '-9999px'
-        document.body.appendChild(container)
-        
-        // Configure html2pdf options
-        const opt = {
-          margin: 0,
-          filename: `${job.company}-${config.label}.pdf`,
-          image: { type: 'jpeg', quality: 0.98 },
-          html2canvas: { scale: 2, useCORS: true },
-          jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+        const checkPageBreak = (requiredSpace = lineHeight) => {
+          if (y + requiredSpace > maxY) {
+            doc.addPage()
+            y = 20
+          }
         }
         
-        // Generate PDF
-        await html2pdf().set(opt).from(container).save()
+        // Header - Name and contact
+        doc.setFont('helvetica', 'bold')
+        doc.setFontSize(20)
+        doc.text(blocks.name || '', 105, y, { align: 'center' })
+        y += 8
         
-        // Cleanup
-        document.body.removeChild(container)
+        if (blocks.subtitle) {
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(11)
+          doc.text(blocks.subtitle, 105, y, { align: 'center' })
+          y += 6
+        }
+        
+        // Contact info
+        doc.setFontSize(9)
+        const contactParts = []
+        if (blocks.email) contactParts.push(blocks.email)
+        if (blocks.phone) contactParts.push(blocks.phone)
+        if (blocks.location) contactParts.push(blocks.location)
+        if (contactParts.length > 0) {
+          doc.text(contactParts.join(' | '), 105, y, { align: 'center' })
+          y += 10
+        }
+        
+        // Summary
+        if (blocks.summary) {
+          checkPageBreak(15)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(14)
+          doc.text('SUMMARY', leftMargin, y)
+          y += 2
+          doc.setDrawColor(0)
+          doc.line(leftMargin, y, rightMargin, y)
+          y += 6
+          
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          const summaryLines = doc.splitTextToSize(blocks.summary, rightMargin - leftMargin)
+          summaryLines.forEach(line => {
+            checkPageBreak()
+            doc.text(line, leftMargin, y)
+            y += lineHeight
+          })
+          y += 4
+        }
+        
+        // Experience
+        if (blocks.experiences && blocks.experiences.length > 0) {
+          checkPageBreak(15)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(14)
+          doc.text('EXPERIENCE', leftMargin, y)
+          y += 2
+          doc.line(leftMargin, y, rightMargin, y)
+          y += 6
+          
+          blocks.experiences.forEach((exp, idx) => {
+            checkPageBreak(20)
+            
+            // Job title and dates (bold)
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(11)
+            doc.text(exp.title || '', leftMargin, y)
+            doc.text(`${exp.startDate || ''} - ${exp.endDate || ''}`, rightMargin, y, { align: 'right' })
+            y += 6
+            
+            // Company and location
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(10)
+            doc.text(exp.company || '', leftMargin, y)
+            doc.text(exp.location || '', rightMargin, y, { align: 'right' })
+            y += 6
+            
+            // Achievements
+            if (exp.achievements) {
+              const achievements = exp.achievements.split('\n').filter(a => a.trim() && !a.trim().startsWith('#'))
+              achievements.forEach(achievement => {
+                checkPageBreak(8)
+                const cleanText = achievement.trim().replace(/^[-•*]\s*/, '')
+                const wrappedLines = doc.splitTextToSize(cleanText, rightMargin - leftMargin - 8)
+                wrappedLines.forEach((line, lineIdx) => {
+                  if (lineIdx === 0) {
+                    doc.text('•', leftMargin + 2, y)
+                    doc.text(line, leftMargin + 8, y)
+                  } else {
+                    checkPageBreak()
+                    doc.text(line, leftMargin + 8, y)
+                  }
+                  y += lineHeight
+                })
+              })
+            }
+            y += 3
+          })
+          y += 2
+        }
+        
+        // Education
+        if (blocks.education && blocks.education.length > 0) {
+          checkPageBreak(15)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(14)
+          doc.text('EDUCATION', leftMargin, y)
+          y += 2
+          doc.line(leftMargin, y, rightMargin, y)
+          y += 6
+          
+          blocks.education.forEach(edu => {
+            checkPageBreak(12)
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(11)
+            const degreeText = `${edu.degree || ''}${edu.grade ? ` (${edu.grade})` : ''}`
+            doc.text(degreeText, leftMargin, y)
+            y += 6
+            
+            doc.setFont('helvetica', 'normal')
+            doc.setFontSize(10)
+            doc.text(edu.institution || '', leftMargin, y)
+            doc.text(`${edu.startDate || ''} - ${edu.endDate || ''}`, rightMargin, y, { align: 'right' })
+            y += 8
+          })
+          y += 2
+        }
+        
+        // Skills
+        if (blocks.skills && (blocks.skills.technical || blocks.skills.relevant || blocks.skills.other)) {
+          checkPageBreak(15)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(14)
+          doc.text('SKILLS', leftMargin, y)
+          y += 2
+          doc.line(leftMargin, y, rightMargin, y)
+          y += 6
+          
+          doc.setFont('helvetica', 'normal')
+          doc.setFontSize(10)
+          const allSkills = [blocks.skills.technical, blocks.skills.relevant, blocks.skills.other]
+            .filter(Boolean)
+            .join(' · ')
+          const skillLines = doc.splitTextToSize(allSkills, rightMargin - leftMargin)
+          skillLines.forEach(line => {
+            checkPageBreak()
+            doc.text(line, leftMargin, y)
+            y += lineHeight
+          })
+          y += 4
+        }
+        
+        // Courses
+        if (blocks.courses && blocks.courses.length > 0) {
+          checkPageBreak(15)
+          doc.setFont('helvetica', 'bold')
+          doc.setFontSize(14)
+          doc.text('TRAINING / COURSES', leftMargin, y)
+          y += 2
+          doc.line(leftMargin, y, rightMargin, y)
+          y += 6
+          
+          blocks.courses.forEach(course => {
+            checkPageBreak(8)
+            doc.setFont('helvetica', 'bold')
+            doc.setFontSize(10)
+            doc.text(`• ${course.title}`, leftMargin + 2, y)
+            y += 5
+            doc.setFont('helvetica', 'normal')
+            doc.text(`  ${course.provider || 'Online'}`, leftMargin + 2, y)
+            y += 6
+          })
+          y += 2
+        }
+        
+        doc.save(`${job.company}-${config.label}.pdf`)
         toast.success('PDF downloaded!')
         return
       }

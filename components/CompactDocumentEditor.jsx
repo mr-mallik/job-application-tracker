@@ -1,10 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Maximize2, FileText, Plus } from 'lucide-react'
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog'
+import { Maximize2, FileText, Plus, Trash2 } from 'lucide-react'
 import { FullScreenDocumentEditor } from './FullScreenDocumentEditor'
 import TemplateGallery from './TemplateGallery'
 import { profileToBlocks } from '@/lib/blockConverters'
@@ -12,6 +14,8 @@ import { profileToBlocks } from '@/lib/blockConverters'
 export function CompactDocumentEditor({ job, documentType, token, onUpdate, userProfile }) {
   const [fullScreen, setFullScreen] = useState(false)
   const [showTemplateGallery, setShowTemplateGallery] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   
   const docConfig = {
     resume: { label: 'Resume', maxPages: 2 },
@@ -81,6 +85,31 @@ export function CompactDocumentEditor({ job, documentType, token, onUpdate, user
     }
   }
 
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      const payload = documentType === 'resume' 
+        ? { [documentType]: { blocks: null, template: 'harvard' } }
+        : { [documentType]: { content: '', refinedContent: '' } }
+      
+      const res = await fetch(`/api/jobs/${job.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(payload)
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      
+      onUpdate(data.job)
+      setShowDeleteDialog(false)
+      toast.success(`${config.label} deleted`)
+    } catch (error) {
+      toast.error(error.message)
+    } finally {
+      setDeleting(false)
+    }
+  }
+
   return (
     <>
       <div className="space-y-4">
@@ -89,10 +118,17 @@ export function CompactDocumentEditor({ job, documentType, token, onUpdate, user
           <h3 className="font-semibold">{config.label}</h3>
           <Badge variant="outline">Max {config.maxPages} pages</Badge>
         </div>
-        <Button onClick={() => setFullScreen(true)} className="gap-2">
-          <Maximize2 className="w-4 h-4" />
-          Open Full Editor
-        </Button>
+        <div className="flex gap-2">
+          {hasContent && (
+            <Button variant="outline" size="sm" onClick={() => setShowDeleteDialog(true)} className="text-red-600 hover:text-red-700">
+              <Trash2 className="w-4 h-4" />
+            </Button>
+          )}
+          <Button onClick={() => setFullScreen(true)} className="gap-2">
+            <Maximize2 className="w-4 h-4" />
+            Open Full Editor
+          </Button>
+        </div>
       </div>
       
       {hasContent ? (
@@ -126,6 +162,23 @@ export function CompactDocumentEditor({ job, documentType, token, onUpdate, user
         userProfile={userProfile}
       />
     )}
+    
+    <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete {config.label}?</AlertDialogTitle>
+          <AlertDialogDescription>
+            This will permanently delete your {config.label.toLowerCase()} for this job. This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={handleDelete} disabled={deleting} className="bg-red-600 hover:bg-red-700">
+            {deleting ? 'Deleting...' : 'Delete'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </>
   )
 }

@@ -139,3 +139,36 @@ code {
     @apply bg-background text-foreground;
     }
 }
+@layer utilities {
+  /* Custom animations for better UX */
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  
+  @keyframes slide-in-from-top {
+    from { transform: translateY(-10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  
+  @keyframes slide-in-from-bottom {
+    from { transform: translateY(10px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  
+  @keyframes slide-in-from-right {
+    from { transform: translateX(10px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  
+  .animate-in { animation: fade-in 0.3s ease-out; }
+  .slide-in-from-top-2 { animation: slide-in-from-top 0.3s ease-out; }
+  .slide-in-from-bottom-4 { animation: slide-in-from-bottom 0.4s ease-out; }
+  .slide-in-from-right { animation: slide-in-from-right 0.3s ease-out; }
+  
+  /* Smooth scrollbar */
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { @apply bg-muted-foreground/20 rounded-full; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-muted-foreground/30; }
+}

@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { ExternalLink, FileText, Sparkles, RefreshCw } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { ExternalLink, FileText, Sparkles, RefreshCw, Bell } from 'lucide-react'
 
 export function JobForm({ job, onSave, onCancel, token, userProfile }) {
   const [loading, setLoading] = useState(false)
@@ -19,7 +20,11 @@ export function JobForm({ job, onSave, onCancel, token, userProfile }) {
     salary: job?.salary || '', closingDate: job?.closingDate || '',
     appliedDate: job?.appliedDate || new Date().toISOString().split('T')[0],
     status: job?.status || 'saved', url: job?.url || '', description: job?.description || '',
-    requirements: job?.requirements || '', benefits: job?.benefits || '', notes: job?.notes || ''
+    requirements: job?.requirements || '', benefits: job?.benefits || '', notes: job?.notes || '',
+    reminder: {
+      enabled: job?.reminder?.enabled || false,
+      daysBefore: job?.reminder?.daysBefore || null
+    }
   })
 
   const handleScrape = async () => {
@@ -120,6 +125,42 @@ export function JobForm({ job, onSave, onCancel, token, userProfile }) {
         <div><Label>Closing Date</Label><Input type="date" value={formData.closingDate} onChange={(e) => setFormData({...formData, closingDate: e.target.value})} /></div>
         <div><Label>Applied Date</Label><Input type="date" value={formData.appliedDate} onChange={(e) => setFormData({...formData, appliedDate: e.target.value})} /></div>
         <div><Label>Status</Label><Select value={formData.status} onValueChange={(v) => setFormData({...formData, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="saved">Saved</SelectItem><SelectItem value="applied">Applied</SelectItem><SelectItem value="interview">Interview</SelectItem><SelectItem value="offer">Offer</SelectItem><SelectItem value="rejected">Rejected</SelectItem><SelectItem value="withdrawn">Withdrawn</SelectItem></SelectContent></Select></div>
+      </div>
+      <div className="border rounded-lg p-4 bg-muted/30">
+        <div className="flex items-start gap-3">
+          <Checkbox 
+            id="reminder-enabled" 
+            checked={formData.reminder.enabled}
+            onCheckedChange={(checked) => setFormData({...formData, reminder: {...formData.reminder, enabled: checked}})}
+          />
+          <div className="flex-1 space-y-2">
+            <div className="flex items-center gap-2">
+              <Bell className="w-4 h-4 text-muted-foreground" />
+              <Label htmlFor="reminder-enabled" className="cursor-pointer font-medium">Email Reminder</Label>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Receive email reminders before the application deadline
+            </p>
+            {formData.reminder.enabled && (
+              <div className="pt-2">
+                <Label className="text-xs">Custom reminder (optional)</Label>
+                <Input 
+                  type="number" 
+                  min="1" 
+                  placeholder="Leave empty for defaults (7 & 1 day before)"
+                  value={formData.reminder.daysBefore || ''}
+                  onChange={(e) => setFormData({...formData, reminder: {...formData.reminder, daysBefore: e.target.value ? parseInt(e.target.value) : null}})}
+                  className="w-full mt-1"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  {formData.reminder.daysBefore 
+                    ? `Reminder will be sent ${formData.reminder.daysBefore} day${formData.reminder.daysBefore === 1 ? '' : 's'} before deadline`
+                    : 'Default: Reminders at 7 days and 1 day before deadline'}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
       <div><Label>Description</Label><Textarea className="min-h-[80px]" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} /></div>
       <div><Label>Requirements</Label><Textarea className="min-h-[60px]" value={formData.requirements} onChange={(e) => setFormData({...formData, requirements: e.target.value})} /></div>

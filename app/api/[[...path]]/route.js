@@ -1,7 +1,7 @@
 import { MongoClient } from 'mongodb'
 import { v4 as uuidv4 } from 'uuid'
 import { NextResponse } from 'next/server'
-import { createUser, verifyUserEmail, loginUser, getUserFromToken, updateUserProfile, resetPasswordRequest, resetPassword, sendEmail } from '@/lib/auth'
+import { createUser, verifyUserEmail, loginUser, getUserFromToken, updateUserProfile, resetPasswordRequest, resetPassword, changePassword, deleteUserAccount, sendEmail } from '@/lib/auth'
 import { scrapeWithPlaywright, parseWithCheerio, detectJobBoard } from '@/lib/scraper'
 import { classifyJobData, refineDocument } from '@/lib/gemini'
 import { getCollection } from '@/lib/db'
@@ -186,6 +186,43 @@ async function handleRoute(request, { params }) {
         return handleCORS(NextResponse.json({ message: 'Password reset successful' }))
       } catch (error) {
         return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      }
+    }
+
+    // Change password (authenticated)
+    if (route === '/auth/change-password' && method === 'POST') {
+      const user = await getAuthUser(request)
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      }
+      
+      const body = await request.json()
+      const { currentPassword, newPassword } = body
+      
+      if (!currentPassword || !newPassword) {
+        return handleCORS(NextResponse.json({ error: 'Current password and new password are required' }, { status: 400 }))
+      }
+      
+      try {
+        await changePassword(user.id, currentPassword, newPassword)
+        return handleCORS(NextResponse.json({ message: 'Password changed successfully' }))
+      } catch (error) {
+        return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+      }
+    }
+
+    // Delete account (authenticated)
+    if (route === '/auth/delete-account' && method === 'DELETE') {
+      const user = await getAuthUser(request)
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+      }
+      
+      try {
+        await deleteUserAccount(user.id)
+        return handleCORS(NextResponse.json({ message: 'Account deleted successfully' }))
+      } catch (error) {
+        return handleCORS(NextResponse.json({ error: error.message }, { status: 500 }))
       }
     }
 

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { Loader2, Briefcase } from 'lucide-react'
 import { AuthPage } from '@/components/AuthPage'
 import { Dashboard } from '@/components/Dashboard'
+import { Header } from '@/components/Header'
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -46,15 +47,26 @@ export default function App() {
   }
   
   return (
-    <Dashboard 
-      user={user} 
-      token={token} 
-      onLogout={() => { 
-        localStorage.clear()
-        setUser(null)
-        setToken(null)
-      }} 
-      onUserUpdate={setUser} 
-    />
+    <>
+      <Header 
+        user={user} 
+        currentPath="/"
+        onLogout={() => { 
+          localStorage.clear()
+          setUser(null)
+          setToken(null)
+        }}
+      />
+      <Dashboard 
+        user={user} 
+        token={token} 
+        onLogout={() => { 
+          localStorage.clear()
+          setUser(null)
+          setToken(null)
+        }} 
+        onUserUpdate={setUser}
+      />
+    </>
   )
 }

@@ -161,10 +161,17 @@ code {
     to { transform: translateX(0); opacity: 1; }
   }
   
+  @keyframes slide-in-from-left {
+    from { transform: translateX(-100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  
   .animate-in { animation: fade-in 0.3s ease-out; }
   .slide-in-from-top-2 { animation: slide-in-from-top 0.3s ease-out; }
   .slide-in-from-bottom-4 { animation: slide-in-from-bottom 0.4s ease-out; }
   .slide-in-from-right { animation: slide-in-from-right 0.3s ease-out; }
+  .slide-in-from-left { animation: slide-in-from-left 0.3s ease-out; }
+  .fade-in { animation: fade-in 0.3s ease-out; }
   
   /* Smooth scrollbar */
   ::-webkit-scrollbar { width: 10px; height: 10px; }

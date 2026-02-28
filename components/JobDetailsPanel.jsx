@@ -5,7 +5,6 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -14,6 +13,7 @@ import { Label } from '@/components/ui/label'
 import { MapPin, DollarSign, Clock, ExternalLink, Edit, Trash2, X, AlertCircle, Building2, Calendar, Loader2, FileText, FileSpreadsheet, File, FileCheck, Sparkles } from 'lucide-react'
 import { JobForm } from './JobForm'
 import { CompactDocumentEditor } from './CompactDocumentEditor'
+import { formatDateShort, isPastDate } from '@/lib/dateUtils'
 
 export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userProfile }) {
   const [activeTab, setActiveTab] = useState('details')
@@ -67,14 +67,14 @@ export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userP
 
   if (editing) {
     return (
-      <div className="h-full flex flex-col">
-        <div className="flex items-center justify-between p-4 border-b bg-muted/50">
+      <div className="h-full flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between p-4 border-b bg-muted/50 shrink-0">
           <h2 className="font-semibold text-lg">Edit Job Application</h2>
           <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
             <X className="w-4 h-4" />
           </Button>
         </div>
-        <ScrollArea className="flex-1 p-4">
+        <div className="flex-1 overflow-y-auto p-4">
           <JobForm 
             job={job} 
             token={token} 
@@ -86,15 +86,15 @@ export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userP
             }} 
             onCancel={() => setEditing(false)} 
           />
-        </ScrollArea>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="h-full flex flex-col">
+    <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="p-4 border-b bg-gradient-to-r from-primary/5 to-primary/10">
+      <div className="p-4 border-b bg-gradient-to-r from-primary/5 to-primary/10 shrink-0">
         <div className="flex items-start justify-between mb-3">
           <div className="flex-1 min-w-0">
             <h2 className="font-bold text-xl mb-1 truncate">{job.title}</h2>
@@ -131,15 +131,18 @@ export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userP
             </Badge>
           )}
           {job.closingDate && (
-            <Badge variant="outline" className="bg-background/50">
+            <Badge 
+              variant="outline" 
+              className={`bg-background/50 ${isPastDate(job.closingDate) ? 'line-through text-muted-foreground' : ''}`}
+            >
               <Clock className="w-3 h-3 mr-1" />
-              Closes: {job.closingDate}
+              {isPastDate(job.closingDate) ? 'Closed' : 'Closes'}: {formatDateShort(job.closingDate)}
             </Badge>
           )}
           {job.appliedDate && (
             <Badge variant="outline" className="bg-background/50">
               <Calendar className="w-3 h-3 mr-1" />
-              Applied: {job.appliedDate}
+              Applied: {formatDateShort(job.appliedDate)}
             </Badge>
           )}
         </div>
@@ -176,8 +179,8 @@ export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userP
       </div>
       
       {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
-        <TabsList className="mx-4 mt-3 w-auto">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col overflow-hidden">
+        <TabsList className="mx-4 mt-3 w-auto shrink-0">
           <TabsTrigger value="details" className="text-sm gap-2">
             <FileText className="w-3 h-3" />
             Details
@@ -196,7 +199,7 @@ export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userP
           </TabsTrigger>
         </TabsList>
         
-        <ScrollArea className="flex-1">
+        <div className="flex-1 overflow-y-auto">
           <div className="p-4">
             <TabsContent value="details" className="mt-0 space-y-6">
               {job.description && (
@@ -326,7 +329,7 @@ export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userP
               />
             </TabsContent>
           </div>
-        </ScrollArea>
+        </div>
       </Tabs>
       
       {/* Rejection Feedback Dialog */}

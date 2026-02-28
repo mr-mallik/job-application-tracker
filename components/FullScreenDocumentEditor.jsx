@@ -1,15 +1,39 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
-import { X, Sparkles, RefreshCw, Copy, Download, Check, FileEdit, Eye } from 'lucide-react'
-import { ResumePDFPreview } from './ResumePDFPreview'
-import { DocumentPDFPreview } from './DocumentPDFPreview'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { X, Sparkles, RefreshCw, Copy, Download, Check, FileEdit, Eye, ZoomIn, ZoomOut, Type, List, Heading, Bold, Italic, Link as LinkIcon, User, HelpCircle, FileText, History } from 'lucide-react'
+import { parseResumeMarkdown, parseDocumentMarkdown } from '@/lib/pdfParser'
+import { RESUME_TEMPLATES, COVER_LETTER_TEMPLATES, generateResumeFromProfile, generateCoverLetterTemplate, generateSupportingStatementTemplate } from '@/lib/templates'
+import { handleEditorShortcut, EDITOR_SHORTCUTS, getDefaultTemplate } from '@/lib/editorHelpers'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { saveVersion, getVersionHistory, restoreVersion, formatVersionTimestamp } from '@/lib/versionHistory'
+import PDFErrorBoundary from './PDFErrorBoundary'
+
+// Dynamic imports for react-pdf (client-side only)
+const PDFViewer = dynamic(
+  () => import('@react-pdf/renderer').then(mod => mod.PDFViewer),
+  { ssr: false, loading: () => <div className="flex items-center justify-center h-full text-sm text-muted-foreground">Loading PDF viewer...</div> }
+)
+
+const PDFDownloadLink = dynamic(
+  () => import('@react-pdf/renderer').then(mod => mod.PDFDownloadLink),
+  { ssr: false }
+)
+
+// Dynamic import for templates
+const ATSResumeTemplate = dynamic(() => import('@/components/pdf-templates/ATSResumeTemplate'), { ssr: false })
+const ModernResumeTemplate = dynamic(() => import('@/components/pdf-templates/ModernResumeTemplate'), { ssr: false })
+const CreativeResumeTemplate = dynamic(() => import('@/components/pdf-templates/CreativeResumeTemplate'), { ssr: false })
+const CoverLetterTemplate = dynamic(() => import('@/components/pdf-templates/CoverLetterTemplate'), { ssr: false })
 
 export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, userProfile, onClose }) {
   const docConfig = {
@@ -25,8 +49,54 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
   const [refining, setRefining] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showRefined, setShowRefined] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState(documentType === 'resume' ? 'ats' : 'formal')
+  const [zoom, setZoom] = useState(100)
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
+  const [versions, setVersions] = useState([])
 
   const previewContent = showRefined && refinedContent ? refinedContent : content
+
+  // Load version history on mount
+  useEffect(() => {
+    setVersions(getVersionHistory(job.id, documentType))
+  }, [job.id, documentType])
+
+  // Calculate character and word counts
+  const stats = useMemo(() => {
+    const text = previewContent
+    return {
+      characters: text.length,
+      words: text.trim().split(/\s+/).filter(Boolean).length,
+      lines: text.split('\n').length,
+    }
+  }, [previewContent])
+
+  // Parse content for PDF rendering
+  const parsedData = useMemo(() => {
+    try {
+      if (documentType === 'resume') {
+        return parseResumeMarkdown(previewContent)
+      } else {
+        return parseDocumentMarkdown(previewContent)
+      }
+    } catch (error) {
+      console.error('PDF parsing error:', error)
+      return documentType === 'resume' ? { header: null, sections: [] } : { paragraphs: [] }
+    }
+  }, [previewContent, documentType])
+
+  // Select appropriate template component
+  const TemplateComponent = useMemo(() => {
+    if (documentType === 'resume') {
+      switch (selectedTemplate) {
+        case 'modern': return ModernResumeTemplate
+        case 'creative': return CreativeResumeTemplate
+        default: return ATSResumeTemplate
+      }
+    } else {
+      return CoverLetterTemplate
+    }
+  }, [documentType, selectedTemplate])
 
   const handleRefine = async () => {
     if (!content && documentType !== 'resume') {
@@ -59,7 +129,7 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
     } catch (error) { toast.error(error.message) } finally { setRefining(false) }
   }
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async (silent = false) => {
     setSaving(true)
     try {
       const res = await fetch(`/api/jobs/${job.id}`, {
@@ -69,122 +139,22 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
-      toast.success('Saved!')
+      if (!silent) toast.success('Saved!')
+      
+      // Save to version history
+      if (content) {
+        saveVersion(job.id, documentType, content)
+        setVersions(getVersionHistory(job.id, documentType))
+      }
+      
+      setHasUnsavedChanges(false)
       onUpdate(data.job)
-    } catch (error) { toast.error(error.message) } finally { setSaving(false) }
-  }
-
-  const downloadPdf = async () => {
-    const { jsPDF } = await import('jspdf')
-    const doc = new jsPDF()
-    const text = showRefined && refinedContent ? refinedContent : content
-    
-    let y = 20
-    const leftMargin = 20
-    const rightMargin = 190
-    const lineHeight = 6
-    const maxY = 280
-    
-    const checkPageBreak = (requiredSpace = lineHeight) => {
-      if (y + requiredSpace > maxY) {
-        doc.addPage()
-        y = 20
-      }
+    } catch (error) { 
+      if (!silent) toast.error(error.message) 
+    } finally { 
+      setSaving(false) 
     }
-    
-    if (documentType === 'resume' && userProfile) {
-      doc.setFont('helvetica', 'bold')
-      doc.setFontSize(16)
-      const name = userProfile.name || ''
-      doc.text(name, 105, y, { align: 'center' })
-      y += 8
-      
-      if (userProfile.designation) {
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(10)
-        doc.text(userProfile.designation, 105, y, { align: 'center' })
-        y += 6
-      }
-      
-      doc.setFontSize(9)
-      const contactParts = []
-      if (userProfile.email) contactParts.push(userProfile.email)
-      if (userProfile.phone) contactParts.push(userProfile.phone)
-      if (userProfile.linkedin) contactParts.push(userProfile.linkedin)
-      if (userProfile.portfolio) contactParts.push(userProfile.portfolio)
-      const contactLine = contactParts.join(' | ')
-      doc.text(contactLine, 105, y, { align: 'center' })
-      y += 8
-      
-      doc.setDrawColor(100, 100, 100)
-      doc.line(leftMargin, y, rightMargin, y)
-      y += 8
-    }
-    
-    const lines = text.split('\n')
-    
-    lines.forEach(line => {
-      const trimmed = line.trim()
-      if (!trimmed) {
-        y += 3
-        return
-      }
-      
-      if (trimmed.match(/^#\s+[A-Z]/) || (trimmed === trimmed.toUpperCase() && trimmed.length > 3 && !trimmed.startsWith('-') && !trimmed.startsWith('**'))) {
-        checkPageBreak(10)
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(12)
-        const headingText = trimmed.replace(/^#+\s*/, '')
-        doc.text(headingText, leftMargin, y)
-        y += 4
-        doc.setDrawColor(150, 150, 150)
-        doc.line(leftMargin, y, rightMargin, y)
-        y += 6
-        return
-      }
-      
-      if (trimmed.startsWith('**') || (trimmed.includes('|') && !trimmed.startsWith('-'))) {
-        checkPageBreak(8)
-        doc.setFont('helvetica', 'bold')
-        doc.setFontSize(10)
-        const subheadingText = trimmed.replace(/\*\*/g, '')
-        doc.text(subheadingText, leftMargin, y)
-        y += 6
-        return
-      }
-      
-      if (trimmed.startsWith('-') || trimmed.startsWith('•')) {
-        checkPageBreak(6)
-        doc.setFont('helvetica', 'normal')
-        doc.setFontSize(10)
-        const bulletText = trimmed.replace(/^[-•]\s*/, '')
-        const wrappedLines = doc.splitTextToSize(bulletText, rightMargin - leftMargin - 8)
-        wrappedLines.forEach((wrappedLine, idx) => {
-          if (idx === 0) {
-            doc.text('•', leftMargin + 3, y)
-            doc.text(wrappedLine, leftMargin + 8, y)
-          } else {
-            checkPageBreak()
-            doc.text(wrappedLine, leftMargin + 8, y)
-          }
-          y += lineHeight
-        })
-        return
-      }
-      
-      checkPageBreak(6)
-      doc.setFont('helvetica', 'normal')
-      doc.setFontSize(10)
-      const wrappedLines = doc.splitTextToSize(trimmed, rightMargin - leftMargin)
-      wrappedLines.forEach(wrappedLine => {
-        checkPageBreak()
-        doc.text(wrappedLine, leftMargin, y)
-        y += lineHeight
-      })
-    })
-    
-    doc.save(`${job.company}-${config.label}.pdf`)
-  }
+  }, [job.id, documentType, content, refinedContent, token, onUpdate])
 
   const useRefinedContent = () => {
     setContent(refinedContent)
@@ -193,18 +163,164 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
     toast.success('Applied')
   }
 
+  const generateFromProfile = useCallback(() => {
+    if (!userProfile) {
+      toast.error('Profile data not available')
+      return
+    }
+
+    let generated = ''
+    if (documentType === 'resume') {
+      generated = generateResumeFromProfile(userProfile, selectedTemplate)
+    } else if (documentType === 'coverLetter') {
+      generated = generateCoverLetterTemplate(userProfile, job)
+    } else if (documentType === 'supportingStatement') {
+      generated = generateSupportingStatementTemplate(userProfile, job)
+    }
+
+    setContent(generated)
+    toast.success('Generated from profile!')
+  }, [userProfile, documentType, selectedTemplate, job])
+
+  const loadTemplate = () => {
+    const template = getDefaultTemplate(documentType)
+    setContent(template)
+    toast.success('Template loaded!')
+  }
+
+  const handleRestoreVersion = (versionId) => {
+    const restoredContent = restoreVersion(job.id, documentType, versionId)
+    if (restoredContent) {
+      setContent(restoredContent)
+      toast.success('Version restored!')
+    } else {
+      toast.error('Failed to restore version')
+    }
+  }
+
+  // Markdown toolbar actions
+  const insertMarkdown = useCallback((syntax, placeholder = 'text') => {
+    const textarea = document.querySelector('textarea')
+    if (!textarea) return
+
+    const start = textarea.selectionStart
+    const end = textarea.selectionEnd
+    const selectedText = content.substring(start, end) || placeholder
+    
+    let newText = content
+    let newCursorPos = start
+
+    switch (syntax) {
+      case 'bold':
+        newText = content.substring(0, start) + `**${selectedText}**` + content.substring(end)
+        newCursorPos = start + 2
+        break
+      case 'italic':
+        newText = content.substring(0, start) + `*${selectedText}*` + content.substring(end)
+        newCursorPos = start + 1
+        break
+      case 'heading':
+        const lineStart = content.lastIndexOf('\n', start - 1) + 1
+        newText = content.substring(0, lineStart) + '# ' + content.substring(lineStart)
+        newCursorPos = lineStart + 2
+        break
+      case 'bullet':
+        const bulletLineStart = content.lastIndexOf('\n', start - 1) + 1
+        newText = content.substring(0, bulletLineStart) + '- ' + content.substring(bulletLineStart)
+        newCursorPos = bulletLineStart + 2
+        break
+      case 'link':
+        newText = content.substring(0, start) + `[${selectedText}](url)` + content.substring(end)
+        newCursorPos = start + selectedText.length + 3
+        break
+      default:
+        return
+    }
+
+    setContent(newText)
+    setTimeout(() => {
+      textarea.focus()
+      textarea.setSelectionRange(newCursorPos, newCursorPos)
+    }, 0)
+  }, [content])
+
+  // Auto-save functionality
+  useEffect(() => {
+    if (!hasUnsavedChanges) return
+    
+    const timer = setTimeout(() => {
+      handleSave(true) // Silent save
+    }, 30000) // Auto-save after 30 seconds of inactivity
+
+    return () => clearTimeout(timer)
+  }, [hasUnsavedChanges, handleSave])
+
+  // Keyboard shortcuts handler
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      handleEditorShortcut(e, {
+        bold: () => insertMarkdown('bold', 'bold text'),
+        italic: () => insertMarkdown('italic', 'italic text'),
+        heading: () => insertMarkdown('heading', 'Section Title'),
+        link: () => insertMarkdown('link', 'link text'),
+        bullet: () => insertMarkdown('bullet', 'List item'),
+        save: () => handleSave(false),
+        generate: generateFromProfile,
+      })
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [insertMarkdown, handleSave, generateFromProfile])
+
+  // Track changes
+  useEffect(() => {
+    const originalContent = job[documentType]?.content || ''
+    const originalRefined = job[documentType]?.refinedContent || ''
+    if (content !== originalContent || refinedContent !== originalRefined) {
+      setHasUnsavedChanges(true)
+    } else {
+      setHasUnsavedChanges(false)
+    }
+  }, [content, refinedContent, job, documentType])
+
   return (
     <div className="fixed inset-0 bg-background z-50 flex flex-col">
+      {/* Top Toolbar */}
       <div className="border-b bg-card px-6 py-3 flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="sm" onClick={onClose}><X className="w-4 h-4 mr-1" />Close</Button>
+          <Button variant="ghost" size="sm" onClick={onClose}>
+            <X className="w-4 h-4 mr-1" />Close
+          </Button>
           <Separator orientation="vertical" className="h-6" />
           <div>
             <h2 className="font-semibold">{config.label} for {job.title}</h2>
-            <p className="text-xs text-muted-foreground">{job.company} • Max {config.maxPages} A4 pages</p>
+            <p className="text-xs text-muted-foreground">
+              {job.company} • Max {config.maxPages} A4 pages
+              {hasUnsavedChanges && <span className="text-orange-600"> • Unsaved changes</span>}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {/* Template Selector */}
+          {documentType === 'resume' && (
+            <>
+              <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                <SelectTrigger className="w-[180px]">
+                  <SelectValue placeholder="Select template" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.values(RESUME_TEMPLATES).map(template => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Separator orientation="vertical" className="h-6" />
+            </>
+          )}
+          
           <Input 
             placeholder="AI Instructions (optional)..." 
             className="w-64"
@@ -217,22 +333,189 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
           </Button>
           <Separator orientation="vertical" className="h-6" />
           <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(previewContent).then(() => toast.success('Copied!'))}><Copy className="w-4 h-4" /></Button>
-          <Button variant="outline" size="sm" onClick={downloadPdf}><Download className="w-4 h-4" /></Button>
-          <Button onClick={handleSave} disabled={saving}>{saving ? 'Saving...' : 'Save'}</Button>
+          
+          {/* PDF Download Link using react-pdf */}
+          {typeof window !== 'undefined' && parsedData && (
+            <PDFDownloadLink
+              document={
+                documentType === 'resume' 
+                  ? <TemplateComponent data={parsedData} />
+                  : <TemplateComponent data={parsedData} userProfile={userProfile} />
+              }
+              fileName={`${job.company.replace(/[^a-z0-9]/gi, '-')}-${config.label.replace(/\s+/g, '-')}.pdf`}
+            >
+              {({ loading }) => (
+                <Button variant="outline" size="sm" disabled={loading}>
+                  {loading ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Download className="w-4 h-4" />}
+                </Button>
+              )}
+            </PDFDownloadLink>
+          )}
+          
+          <Button onClick={() => handleSave(false)} disabled={saving}>
+            {saving ? 'Saving...' : 'Save'}
+          </Button>
         </div>
       </div>
       
       <div className="flex-1 flex overflow-hidden">
+        {/* Left Panel - Markdown Editor */}
         <div className="w-1/2 border-r flex flex-col">
           <div className="px-4 py-2 border-b bg-muted/50 flex items-center justify-between">
-            <Label className="flex items-center gap-2"><FileEdit className="w-4 h-4" />Markdown Editor</Label>
-            {refinedContent && (
-              <div className="flex gap-1">
-                <Button size="sm" variant={!showRefined ? "default" : "outline"} className="h-7" onClick={() => setShowRefined(false)}>Original</Button>
-                <Button size="sm" variant={showRefined ? "default" : "outline"} className="h-7" onClick={() => setShowRefined(true)}>Refined</Button>
-              </div>
-            )}
+            <Label className="flex items-center gap-2">
+              <FileEdit className="w-4 h-4" />Markdown Editor
+            </Label>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {stats.characters} chars • {stats.words} words • {stats.lines} lines
+              </span>
+              {refinedContent && (
+                <div className="flex gap-1 ml-2">
+                  <Button size="sm" variant={!showRefined ? "default" : "outline"} className="h-7" onClick={() => setShowRefined(false)}>Original</Button>
+                  <Button size="sm" variant={showRefined ? "default" : "outline"} className="h-7" onClick={() => setShowRefined(true)}>Refined</Button>
+                </div>
+              )}
+            </div>
           </div>
+          
+          {/* Markdown Toolbar */}
+          <div className="px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+                onClick={generateFromProfile}
+                title="Generate from Profile (Ctrl+G)"
+              >
+                <User className="w-4 h-4 mr-1" />
+                <span className="text-xs">Profile</span>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-2"
+                onClick={loadTemplate}
+                title="Load Template"
+              >
+                <FileText className="w-4 h-4 mr-1" />
+                <span className="text-xs">Template</span>
+              </Button>
+              
+              {/* Version History Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2"
+                    title="Version History"
+                    disabled={versions.length === 0}
+                  >
+                    <History className="w-4 h-4 mr-1" />
+                    <span className="text-xs">History</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-64">
+                  <DropdownMenuLabel>Version History</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {versions.length === 0 ? (
+                    <div className="px-2 py-4 text-xs text-muted-foreground text-center">
+                      No saved versions yet
+                    </div>
+                  ) : (
+                    versions.map((version, idx) => (
+                      <DropdownMenuItem 
+                        key={version.id}
+                        onClick={() => handleRestoreVersion(version.id)}
+                        className="flex flex-col items-start py-2"
+                      >
+                        <div className="flex items-center justify-between w-full mb-1">
+                          <span className="text-xs font-medium">Version {versions.length - idx}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {formatVersionTimestamp(version.timestamp)}
+                          </span>
+                        </div>
+                        <span className="text-xs text-muted-foreground line-clamp-1">
+                          {version.preview}
+                        </span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <Separator orientation="vertical" className="h-6 mx-1" />
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => insertMarkdown('bold', 'bold text')}
+                title="Bold (Ctrl+B)"
+              >
+                <Bold className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => insertMarkdown('italic', 'italic text')}
+                title="Italic (Ctrl+I)"
+              >
+                <Italic className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => insertMarkdown('heading', 'Section Title')}
+                title="Heading (Ctrl+H)"
+              >
+                <Heading className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => insertMarkdown('bullet', 'List item')}
+                title="Bullet List (Ctrl+Shift+L)"
+              >
+                <List className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() => insertMarkdown('link', 'link text')}
+                title="Insert Link (Ctrl+L)"
+              >
+                <LinkIcon className="w-4 h-4" />
+              </Button>
+            </div>
+            
+            {/* Help Tooltip */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <HelpCircle className="w-4 h-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left" className="w-64">
+                  <div className="space-y-2">
+                    <p className="font-semibold text-sm">Keyboard Shortcuts</p>
+                    {EDITOR_SHORTCUTS.map((shortcut, idx) => (
+                      <div key={idx} className="flex justify-between text-xs">
+                        <span className="text-muted-foreground">{shortcut.action}</span>
+                        <kbd className="px-2 py-0.5 bg-muted rounded text-xs">{shortcut.key}</kbd>
+                      </div>
+                    ))}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+
           <div className="flex-1 p-4 overflow-auto">
             {showRefined && refinedContent ? (
               <div className="h-full flex flex-col">
@@ -240,32 +523,99 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
                   className="flex-1 font-mono text-sm bg-purple-50 resize-none"
                   value={refinedContent}
                   onChange={(e) => setRefinedContent(e.target.value)}
+                  spellCheck={false}
                 />
                 <Button size="sm" variant="outline" className="mt-2 w-fit" onClick={useRefinedContent}>
                   <Check className="w-4 h-4 mr-1" />Apply to Original
                 </Button>
               </div>
             ) : (
-              <Textarea 
-                placeholder={documentType === 'resume' ? '# SUMMARY\nYour professional summary...\n\n# RELEVANT WORK EXPERIENCE\n**Job Title | Company, Location | mm/yyyy - mm/yyyy**\n- Achievement 1\n- Achievement 2' : `Enter your ${config.label.toLowerCase()} content...`}
-                className="h-full font-mono text-sm resize-none"
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-              />
+              <>
+                {!content ? (
+                  <div className="h-full flex items-center justify-center">
+                    <div className="text-center space-y-4 max-w-md">
+                      <FileEdit className="w-12 h-12 mx-auto text-muted-foreground" />
+                      <div>
+                        <h3 className="font-semibold text-lg mb-2">Start Creating Your {config.label}</h3>
+                        <p className="text-sm text-muted-foreground mb-4">
+                          Choose how you'd like to begin:
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Button onClick={generateFromProfile} variant="default" className="w-full">
+                          <User className="w-4 h-4 mr-2" />
+                          Generate from Profile
+                        </Button>
+                        <Button onClick={loadTemplate} variant="outline" className="w-full">
+                          <FileText className="w-4 h-4 mr-2" />
+                          Load Template
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-4">
+                        Or start typing in the editor (Ctrl+H for heading, Ctrl+B for bold)
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <Textarea 
+                    placeholder={documentType === 'resume' ? '# PROFESSIONAL SUMMARY\nYour professional summary...\n\n# WORK EXPERIENCE\n**Job Title | Company, Location | mm/yyyy - mm/yyyy**\n- Achievement 1\n- Achievement 2\n\n# EDUCATION\n**Degree** - Institution | Graduation Date\n\n# SKILLS\nSkill 1, Skill 2, Skill 3' : `Enter your ${config.label.toLowerCase()} content...\n\nUse markdown formatting:\n# for headings\n**text** for bold\n- for bullet points`}
+                    className="h-full font-mono text-sm resize-none"
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    spellCheck={false}
+                  />
+                )}
+              </>
             )}
           </div>
         </div>
         
+        {/* Right Panel - PDF Preview */}
         <div className="w-1/2 flex flex-col bg-gray-100">
-          <div className="px-4 py-2 border-b bg-muted/50">
-            <Label className="flex items-center gap-2"><Eye className="w-4 h-4" />A4 PDF Preview (Inter Font)</Label>
+          <div className="px-4 py-2 border-b bg-muted/50 flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <Eye className="w-4 h-4" />PDF Preview
+            </Label>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={() => setZoom(Math.max(50, zoom - 10))}
+                disabled={zoom <= 50}
+              >
+                <ZoomOut className="w-4 h-4" />
+              </Button>
+              <span className="text-xs text-muted-foreground w-12 text-center">{zoom}%</span>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0"
+                onClick={() => setZoom(Math.min(150, zoom + 10))}
+                disabled={zoom >= 150}
+              >
+                <ZoomIn className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
-          <div className="flex-1 overflow-auto p-6">
-            {documentType === 'resume' ? (
-              <ResumePDFPreview content={previewContent} userProfile={userProfile} maxPages={config.maxPages} />
-            ) : (
-              <DocumentPDFPreview content={previewContent} maxPages={config.maxPages} documentType={documentType} />
-            )}
+          <div className="flex-1 overflow-auto p-6 flex items-start justify-center">
+            <PDFErrorBoundary>
+              {typeof window !== 'undefined' && parsedData && TemplateComponent && (
+                <div style={{ 
+                  transform: `scale(${zoom / 100})`, 
+                  transformOrigin: 'top center',
+                  width: `${100 / (zoom / 100)}%`,
+                }}>
+                  <PDFViewer width="100%" height="800" showToolbar={false} className="border-0 rounded shadow-lg">
+                    {documentType === 'resume' ? (
+                      <TemplateComponent data={parsedData} />
+                    ) : (
+                      <TemplateComponent data={parsedData} userProfile={userProfile} />
+                    )}
+                  </PDFViewer>
+                </div>
+              )}
+            </PDFErrorBoundary>
           </div>
         </div>
       </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -8,12 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Briefcase, Plus, LogOut, User, RefreshCw, X, TrendingUp, UserCheck, CalendarCheck, PartyPopper, AlertCircle, Loader2 } from 'lucide-react'
+import { Briefcase, Plus, RefreshCw, X, TrendingUp, UserCheck, CalendarCheck, PartyPopper, AlertCircle, Loader2 } from 'lucide-react'
 import { statusColors } from './constants'
 import { JobForm } from './JobForm'
 import { JobDetailsPanel } from './JobDetailsPanel'
-import { ProfileEditor } from './ProfileEditor'
-import { ThemeToggle } from '@/components/theme-toggle'
 import { formatDateShort, isPastDate } from '@/lib/dateUtils'
 
 export function Dashboard({ user, token, onLogout, onUserUpdate }) {
@@ -21,7 +20,6 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [loading, setLoading] = useState(true)
   const [selectedJob, setSelectedJob] = useState(null)
   const [showAddJob, setShowAddJob] = useState(false)
-  const [showProfile, setShowProfile] = useState(false)
   const [filter, setFilter] = useState('all')
 
   useEffect(() => { loadJobs() }, [])
@@ -68,36 +66,7 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
   ]
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-40 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/60 shadow-sm">
-        <div className="container mx-auto px-4 lg:px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/80 rounded-xl flex items-center justify-center shadow-md">
-                <Briefcase className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="font-bold text-lg tracking-tight">Job Application Tracker</h1>
-                <p className="text-sm text-muted-foreground">Welcome back, {user.name}</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <Separator orientation="vertical" className="h-8" />
-              <Button variant="outline" size="sm" onClick={() => setShowProfile(true)} className="transition-all hover:bg-accent">
-                <User className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Profile</span>
-              </Button>
-              <Button variant="outline" size="sm" onClick={onLogout} className="transition-all hover:bg-accent">
-                <LogOut className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Logout</span>
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
-      
+    <div className="min-h-[calc(100vh-3.5rem)] bg-background">
       {/* Main Content */}
       <div className="container mx-auto px-4 lg:px-6 py-6 space-y-6">
         {/* Compact Stats Bar */}
@@ -267,26 +236,6 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
               toast.success('Job added successfully!')
             }} 
             onCancel={() => setShowAddJob(false)} 
-          />
-        </DialogContent>
-      </Dialog>
-      
-      <Dialog open={showProfile} onOpenChange={setShowProfile}>
-        <DialogContent className="max-w-6xl max-h-[90vh]">
-          <DialogHeader>
-            <DialogTitle className="text-2xl">Profile & Resume Data</DialogTitle>
-            <DialogDescription>Your profile information is used as a template for AI-generated resumes and cover letters</DialogDescription>
-          </DialogHeader>
-          <ProfileEditor 
-            user={user} 
-            token={token} 
-            onSave={(updatedUser) => { 
-              localStorage.setItem('user', JSON.stringify(updatedUser))
-              onUserUpdate(updatedUser)
-              setShowProfile(false)
-              toast.success('Profile updated successfully!')
-            }} 
-            onCancel={() => setShowProfile(false)} 
           />
         </DialogContent>
       </Dialog>

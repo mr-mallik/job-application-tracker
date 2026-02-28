@@ -1,7 +1,7 @@
 import { MongoClient } from 'mongodb'
 import { v4 as uuidv4 } from 'uuid'
 import { NextResponse } from 'next/server'
-import { createUser, verifyUserEmail, loginUser, getUserFromToken, updateUserProfile, resetPasswordRequest, resetPassword } from '@/lib/auth'
+import { createUser, verifyUserEmail, loginUser, getUserFromToken, updateUserProfile, resetPasswordRequest, resetPassword, sendEmail } from '@/lib/auth'
 import { scrapeWithPlaywright, parseWithCheerio, detectJobBoard } from '@/lib/scraper'
 import { classifyJobData, refineDocument } from '@/lib/gemini'
 import { getCollection } from '@/lib/db'
@@ -351,6 +351,10 @@ async function handleRoute(request, { params }) {
         benefits: body.benefits || '',
         notes: body.notes || '',
         rejectionFeedback: '',
+        reminder: {
+          enabled: body.reminder?.enabled || false,
+          daysBefore: body.reminder?.daysBefore || null // null means use system defaults (7 and 1 day)
+        },
         resume: { content: '', refinedContent: '' },
         coverLetter: { content: '', refinedContent: '' },
         supportingStatement: { content: '', refinedContent: '' },
@@ -392,7 +396,7 @@ async function handleRoute(request, { params }) {
       const body = await request.json()
       
       const updates = { updatedAt: new Date() }
-      const allowedFields = ['title', 'company', 'location', 'salary', 'closingDate', 'appliedDate', 'status', 'url', 'description', 'requirements', 'benefits', 'notes', 'rejectionFeedback', 'resume', 'coverLetter', 'supportingStatement']
+      const allowedFields = ['title', 'company', 'location', 'salary', 'closingDate', 'appliedDate', 'status', 'url', 'description', 'requirements', 'benefits', 'notes', 'rejectionFeedback', 'resume', 'coverLetter', 'supportingStatement', 'reminder']
       
       for (const field of allowedFields) {
         if (body[field] !== undefined) {
@@ -429,6 +433,142 @@ async function handleRoute(request, { params }) {
       }
       
       return handleCORS(NextResponse.json({ message: 'Job deleted' }))
+    }
+
+    // ============ REMINDER ROUTES ============
+    
+    // Check and send reminders for upcoming deadlines
+    if (route === '/reminders/check' && method === 'POST') {
+      try {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        
+        // Find all jobs with reminders enabled, status is "saved", and have a closing date
+        const jobs = await db.collection('jobs').find({
+          'reminder.enabled': true,
+          status: 'saved',
+          closingDate: { $ne: null, $exists: true }
+        }).toArray()
+        
+        console.log(`[Reminders] Found ${jobs.length} jobs with reminders enabled`)
+        
+        const remindersSent = []
+        const errors = []
+        
+        for (const job of jobs) {
+          try {
+            // Skip if no closing date
+            if (!job.closingDate) continue
+            
+            // Parse closing date
+            const closingDate = new Date(job.closingDate)
+            closingDate.setHours(0, 0, 0, 0)
+            
+            // Calculate days until deadline
+            const daysUntilDeadline = Math.ceil((closingDate - today) / (1000 * 60 * 60 * 24))
+            
+            // Skip if deadline has passed
+            if (daysUntilDeadline < 0) {
+              console.log(`[Reminders] Skipping job ${job.id} - deadline passed`)
+              continue
+            }
+            
+            // Determine if reminder should be sent
+            let shouldSend = false
+            
+            if (job.reminder.daysBefore !== null && job.reminder.daysBefore !== undefined) {
+              // User has set custom reminder
+              shouldSend = daysUntilDeadline === job.reminder.daysBefore
+            } else {
+              // Use system defaults: 7 days and 1 day before
+              shouldSend = daysUntilDeadline === 7 || daysUntilDeadline === 1
+            }
+            
+            if (shouldSend) {
+              // Get user email
+              const user = await db.collection('users').findOne({ id: job.userId })
+              if (!user || !user.email) {
+                console.log(`[Reminders] Skipping job ${job.id} - user not found`)
+                continue
+              }
+              
+              // Format deadline date
+              const deadlineFormatted = closingDate.toLocaleDateString('en-US', { 
+                weekday: 'long', 
+                year: 'numeric', 
+                month: 'long', 
+                day: 'numeric' 
+              })
+              
+              // Compose email
+              const subject = `⏰ Reminder: ${job.title} application deadline approaching`
+              const text = `Hi ${user.name || 'there'},
+
+This is a reminder that the application deadline for the following job is approaching:
+
+Job Title: ${job.title}
+Company: ${job.company}
+Deadline: ${deadlineFormatted} (${daysUntilDeadline} day${daysUntilDeadline === 1 ? '' : 's'} remaining)
+${job.url ? `\nJob URL: ${job.url}` : ''}
+
+Don't forget to submit your application before the deadline!
+
+---
+Job Application Tracker
+Login to manage your applications: ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}`
+
+              const html = `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #2563eb;">⏰ Application Deadline Reminder</h2>
+                  <p>Hi ${user.name || 'there'},</p>
+                  <p>This is a reminder that the application deadline for the following job is approaching:</p>
+                  <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
+                    <p style="margin: 8px 0;"><strong>Job Title:</strong> ${job.title}</p>
+                    <p style="margin: 8px 0;"><strong>Company:</strong> ${job.company}</p>
+                    <p style="margin: 8px 0;"><strong>Deadline:</strong> ${deadlineFormatted}</p>
+                    <p style="margin: 8px 0; color: #dc2626; font-weight: bold;">
+                      ${daysUntilDeadline} day${daysUntilDeadline === 1 ? '' : 's'} remaining
+                    </p>
+                    ${job.url ? `<p style="margin: 8px 0;"><a href="${job.url}" style="color: #2563eb;">View Job Posting</a></p>` : ''}
+                  </div>
+                  <p>Don't forget to submit your application before the deadline!</p>
+                  <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;" />
+                  <p style="font-size: 12px; color: #6b7280;">
+                    Job Application Tracker<br />
+                    <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" style="color: #2563eb;">Login to manage your applications</a>
+                  </p>
+                </div>
+              `
+              
+              // Send email
+              await sendEmail(user.email, subject, text, html)
+              
+              remindersSent.push({
+                jobId: job.id,
+                jobTitle: job.title,
+                company: job.company,
+                daysUntilDeadline,
+                userEmail: user.email
+              })
+              
+              console.log(`[Reminders] ✅ Sent reminder to ${user.email} for ${job.title} at ${job.company}`)
+            }
+          } catch (error) {
+            console.error(`[Reminders] Error processing job ${job.id}:`, error)
+            errors.push({ jobId: job.id, error: error.message })
+          }
+        }
+        
+        return handleCORS(NextResponse.json({ 
+          success: true,
+          remindersSent: remindersSent.length,
+          reminders: remindersSent,
+          errors: errors.length > 0 ? errors : undefined
+        }))
+      } catch (error) {
+        console.error('[Reminders] Error:', error)
+        return handleCORS(NextResponse.json({ error: 'Failed to check reminders: ' + error.message }, { status: 500 }))
+      }
     }
 
     // ============ DOCUMENT ROUTES ============

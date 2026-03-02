@@ -67,7 +67,15 @@ const styles = StyleSheet.create({
 })
 
 export default function CoverLetterTemplate({ data, userProfile }) {
-  const { paragraphs } = data
+  
+  
+  
+   : 'null')
+  
+  
+  
+  
+  const { paragraphs } = data || {}
 
   return (
     <Document>
@@ -91,6 +99,8 @@ export default function CoverLetterTemplate({ data, userProfile }) {
 
         {/* Content */}
         {paragraphs && paragraphs.map((para, idx) => {
+          if (!para || !para.content) return null
+          
           if (para.type === 'heading') {
             return (
               <Text key={idx} style={styles.heading}>

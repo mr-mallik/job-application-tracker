@@ -23,11 +23,24 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [filter, setFilter] = useState('all')
 
   // Merge user root fields with profile for backward compatibility
+  // Handle both flat structure (fields at root) and nested structure (user.profile.*)
   const userProfile = user ? {
-    ...user.profile,
+    // Prefer nested structure if it exists, otherwise use root-level fields
     name: user.name,
     email: user.email,
-    id: user.id
+    id: user.id,
+    headline: user.profile?.headline || user.designation,
+    phone: user.profile?.phone || user.phone,
+    location: user.profile?.location || user.location,
+    linkedin: user.profile?.linkedin || user.linkedin,
+    portfolio: user.profile?.portfolio || user.portfolio,
+    summary: user.profile?.summary || user.summary,
+    experiences: user.profile?.experiences || user.experiences || [],
+    education: user.profile?.education || user.education,
+    skills: user.profile?.skills || user.skills,
+    projects: user.profile?.projects || user.projects || [],
+    certifications: user.profile?.certifications || user.certifications || [],
+    achievements: user.profile?.achievements || user.achievements,
   } : null
 
   useEffect(() => { loadJobs() }, [])

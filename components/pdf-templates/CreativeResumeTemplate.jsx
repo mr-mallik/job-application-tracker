@@ -106,18 +106,22 @@ const styles = StyleSheet.create({
 })
 
 export default function CreativeResumeTemplate({ data }) {
-  const { header, sections } = data
+  const { header, sections } = data || {}
 
   // Split sections into left (Skills, Education, Certifications) and right (Experience, Summary, Projects)
-  const leftSections = sections.filter(s => 
-    s.title.toLowerCase().includes('skill') || 
-    s.title.toLowerCase().includes('education') ||
-    s.title.toLowerCase().includes('certification')
+  const leftSections = (sections || []).filter(s => 
+    s && s.title && (
+      s.title.toLowerCase().includes('skill') || 
+      s.title.toLowerCase().includes('education') ||
+      s.title.toLowerCase().includes('certification')
+    )
   )
-  const rightSections = sections.filter(s => 
-    !s.title.toLowerCase().includes('skill') && 
-    !s.title.toLowerCase().includes('education') &&
-    !s.title.toLowerCase().includes('certification')
+  const rightSections = (sections || []).filter(s => 
+    s && s.title && (
+      !s.title.toLowerCase().includes('skill') && 
+      !s.title.toLowerCase().includes('education') &&
+      !s.title.toLowerCase().includes('certification')
+    )
   )
 
   return (
@@ -151,8 +155,10 @@ export default function CreativeResumeTemplate({ data }) {
           {/* Left Sections */}
           {leftSections.map((section, sIdx) => (
             <View key={sIdx} style={styles.leftSection}>
-              <Text style={styles.leftSectionTitle}>{section.title}</Text>
+              <Text style={styles.leftSectionTitle}>{section.title || 'Section'}</Text>
               {section.items && section.items.map((item, iIdx) => {
+                if (!item || !item.content) return null
+                
                 if (item.type === 'subheading') {
                   return (
                     <Text key={iIdx} style={[styles.leftText, { fontFamily: 'Helvetica-Bold', marginTop: 6 }]}>
@@ -163,7 +169,7 @@ export default function CreativeResumeTemplate({ data }) {
                 
                 if (item.type === 'text') {
                   // Check if it's a comma-separated list (skills)
-                  if (item.content.includes(',')) {
+                  if (item.content && item.content.includes(',')) {
                     const items = item.content.split(',').map(s => s.trim())
                     return items.map((skill, skillIdx) => (
                       <Text key={`${iIdx}-${skillIdx}`} style={styles.skillItem}>
@@ -171,7 +177,7 @@ export default function CreativeResumeTemplate({ data }) {
                       </Text>
                     ))
                   }
-                  return <Text key={iIdx} style={styles.leftText}>{item.content}</Text>
+                  return <Text key={iIdx} style={styles.leftText}>{item.content || ''}</Text>
                 }
                 
                 return null
@@ -184,9 +190,11 @@ export default function CreativeResumeTemplate({ data }) {
         <View style={styles.rightColumn}>
           {rightSections.map((section, sIdx) => (
             <View key={sIdx} style={styles.section} wrap={false}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
+              <Text style={styles.sectionTitle}>{section.title || 'Section'}</Text>
               
               {section.items && section.items.map((item, iIdx) => {
+                if (!item || !item.content) return null
+                
                 if (item.type === 'subheading') {
                   return (
                     <View key={iIdx} style={styles.itemContainer}>

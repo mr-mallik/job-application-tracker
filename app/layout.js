@@ -23,6 +23,10 @@ export default function RootLayout({ children }) {
         >
           <div className="flex-1">{children}</div>
           <footer className="flex justify-center items-center py-4 border-t bg-card/50 backdrop-blur-sm">
+            <span className="text-sm text-muted-foreground">
+              © {new Date().getFullYear()} Job Application Tracker. All rights reserved.
+            </span>
+            <span className="mx-2 text-muted-foreground">|</span>
             <Link
               href="/legal/cookies"
               className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3"
@@ -43,6 +47,10 @@ export default function RootLayout({ children }) {
             >
               Terms
             </Link>
+            <span className="mx-2 text-muted-foreground">|</span>
+            <span className="text-sm text-muted-foreground">
+              Built with Next.js and Tailwind CSS
+            </span>
           </footer>
           <Toaster position="top-right" richColors />
         </ThemeProvider>

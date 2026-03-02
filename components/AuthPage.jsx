@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,15 +15,7 @@ import {
   CardFooter,
 } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import {
-  Briefcase,
-  Loader2,
-  ArrowLeft,
-  Mail,
-  Lock,
-  User as UserIcon,
-  KeyRound,
-} from 'lucide-react';
+import { Loader2, ArrowLeft, Mail, Lock, User as UserIcon, KeyRound } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme-toggle';
 
 export function AuthPage({ onLogin }) {
@@ -160,13 +153,27 @@ export function AuthPage({ onLogin }) {
 
       <Card className="w-full max-w-md shadow-2xl border-2 relative z-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
         <CardHeader className="text-center space-y-4 pb-6">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-primary to-primary/80 rounded-2xl flex items-center justify-center shadow-lg transform transition-transform hover:scale-105">
-            <Briefcase className="w-8 h-8 text-primary-foreground" />
+          <div className="mx-auto w-16 h-16 flex items-center justify-center">
+            <Image
+              src="/assets/logo/jobtracker-logo.png"
+              alt="Logo"
+              width={64}
+              height={64}
+              className="w-16 h-16"
+              priority
+            />
           </div>
           <div className="space-y-2">
-            <CardTitle className="text-3xl font-bold tracking-tight">
-              Job Application Tracker
-            </CardTitle>
+            <div className="flex justify-center">
+              <Image
+                src="/assets/logo/jobtracker-text.png"
+                alt="Job Application Tracker"
+                width={240}
+                height={48}
+                className="h-12 w-auto"
+                priority
+              />
+            </div>
             <CardDescription className="text-base">
               {isVerifying
                 ? 'Verify your email address'

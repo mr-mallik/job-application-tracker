@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Loader2, Briefcase } from 'lucide-react';
+import Image from 'next/image';
 import { AuthPage } from '@/components/AuthPage';
 import { Dashboard } from '@/components/Dashboard';
 import { Header } from '@/components/Header';
@@ -25,16 +25,27 @@ export default function App() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-background via-primary/5 to-background">
         <div className="space-y-6 text-center">
-          <div className="relative">
-            <div className="w-20 h-20 bg-gradient-to-br from-primary to-primary/80 rounded-2xl flex items-center justify-center shadow-lg mx-auto animate-pulse">
-              <Briefcase className="w-10 h-10 text-primary-foreground" />
-            </div>
-            <div className="absolute -bottom-2 -right-2">
-              <Loader2 className="w-8 h-8 animate-spin text-primary" />
+          <div className="relative flex items-center justify-center">
+            <div className="w-24 h-24 flex items-center justify-center animate-spin">
+              <Image
+                src="/assets/logo/jobtracker-logo.png"
+                alt="Job Tracker Logo"
+                width={96}
+                height={96}
+                priority
+                className="drop-shadow-lg"
+              />
             </div>
           </div>
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold">Job Application Tracker</h2>
+            <Image
+              src="/assets/logo/jobtracker-text.png"
+              alt="Job Application Tracker"
+              width={300}
+              height={40}
+              priority
+              className="mx-auto"
+            />
             <p className="text-sm text-muted-foreground">Loading your applications...</p>
           </div>
         </div>

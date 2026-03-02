@@ -21,18 +21,22 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 25,
+    textAlign: 'center',
   },
   name: {
+    textTransform: 'uppercase',
     fontSize: 22,
     fontFamily: 'Helvetica-Bold',
     color: '#FFFFFF',
     marginBottom: 6,
+    textAlign: 'center',
   },
   designation: {
     fontSize: 12,
     color: '#93C5FD',
     marginBottom: 12,
     fontFamily: 'Helvetica-Bold',
+    textAlign: 'center',
   },
   contact: {
     fontSize: 9,
@@ -137,6 +141,25 @@ export default function CreativeResumeTemplate({ data }) {
               {header.designation && <Text style={styles.designation}>{header.designation}</Text>}
               {header.contact &&
                 header.contact.map((contact, idx) => {
+                  // Parse markdown link syntax [text](url)
+                  const markdownLinkMatch = contact.match(/\[([^\]]+)\]\(([^)]+)\)/);
+                  if (markdownLinkMatch) {
+                    const [fullMatch, linkText, url] = markdownLinkMatch;
+                    const beforeLink = contact.substring(0, contact.indexOf(fullMatch));
+                    const afterLink = contact.substring(
+                      contact.indexOf(fullMatch) + fullMatch.length
+                    );
+                    return (
+                      <Text key={idx} style={styles.contact}>
+                        {beforeLink}
+                        <Link src={url} style={styles.link}>
+                          {linkText}
+                        </Link>
+                        {afterLink}
+                      </Text>
+                    );
+                  }
+                  // Check if contact contains plain URL
                   const urlMatch = contact.match(/(https?:\/\/[^\s]+)/);
                   if (urlMatch) {
                     const parts = contact.split(urlMatch[1]);

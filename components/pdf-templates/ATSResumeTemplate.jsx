@@ -11,21 +11,31 @@ const styles = StyleSheet.create({
   },
   header: {
     marginBottom: 20,
+    textAlign: 'center',
   },
   name: {
     fontSize: 24,
     fontFamily: 'Helvetica-Bold',
-    marginBottom: 4,
+    marginBottom: 20,
+    textAlign: 'center',
+    textTransform: 'uppercase',
   },
   designation: {
     fontSize: 13,
     color: '#374151',
-    marginBottom: 8,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  contactRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginBottom: 2,
   },
   contact: {
     fontSize: 10,
     color: '#6B7280',
-    marginBottom: 2,
+    marginRight: 4,
   },
   link: {
     color: '#2563EB',
@@ -55,14 +65,20 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     color: '#374151',
   },
-  bullet: {
-    fontSize: 10,
+  bulletContainer: {
+    flexDirection: 'row',
     marginBottom: 3,
     marginLeft: 12,
+  },
+  bulletPoint: {
+    width: 15,
+    fontSize: 10,
     color: '#374151',
   },
   bulletText: {
-    marginLeft: 5,
+    flex: 1,
+    fontSize: 10,
+    color: '#374151',
   },
   skillsContainer: {
     flexDirection: 'row',
@@ -86,28 +102,52 @@ export default function ATSResumeTemplate({ data }) {
           <View style={styles.header}>
             {header.name && <Text style={styles.name}>{header.name}</Text>}
             {header.designation && <Text style={styles.designation}>{header.designation}</Text>}
-            {header.contact &&
-              header.contact.map((contact, idx) => {
-                // Check if contact contains URL
-                const urlMatch = contact.match(/(https?:\/\/[^\s]+)/);
-                if (urlMatch) {
-                  const parts = contact.split(urlMatch[1]);
+            {header.contact && header.contact.length > 0 && (
+              <View style={styles.contactRow}>
+                {header.contact.map((contact, idx) => {
+                  // Parse markdown link syntax [text](url)
+                  const markdownLinkMatch = contact.match(/\[([^\]]+)\]\(([^)]+)\)/);
+                  if (markdownLinkMatch) {
+                    const [fullMatch, linkText, url] = markdownLinkMatch;
+                    const beforeLink = contact.substring(0, contact.indexOf(fullMatch));
+                    const afterLink = contact.substring(
+                      contact.indexOf(fullMatch) + fullMatch.length
+                    );
+                    return (
+                      <Text key={idx} style={styles.contact}>
+                        {beforeLink}
+                        <Link src={url} style={styles.link}>
+                          {linkText}
+                        </Link>
+                        {afterLink}
+                        {idx < header.contact.length - 1 && ' | '}
+                      </Text>
+                    );
+                  }
+                  // Check if contact contains plain URL
+                  const urlMatch = contact.match(/(https?:\/\/[^\s]+)/);
+                  if (urlMatch) {
+                    const parts = contact.split(urlMatch[1]);
+                    return (
+                      <Text key={idx} style={styles.contact}>
+                        {parts[0]}
+                        <Link src={urlMatch[1]} style={styles.link}>
+                          {urlMatch[1]}
+                        </Link>
+                        {parts[1]}
+                        {idx < header.contact.length - 1 && ' | '}
+                      </Text>
+                    );
+                  }
                   return (
                     <Text key={idx} style={styles.contact}>
-                      {parts[0]}
-                      <Link src={urlMatch[1]} style={styles.link}>
-                        {urlMatch[1]}
-                      </Link>
-                      {parts[1]}
+                      {contact}
+                      {idx < header.contact.length - 1 && ' | '}
                     </Text>
                   );
-                }
-                return (
-                  <Text key={idx} style={styles.contact}>
-                    {contact}
-                  </Text>
-                );
-              })}
+                })}
+              </View>
+            )}
           </View>
         )}
 
@@ -131,9 +171,9 @@ export default function ATSResumeTemplate({ data }) {
 
                   if (item.type === 'bullet') {
                     return (
-                      <View key={iIdx} style={{ flexDirection: 'row', marginBottom: 3 }}>
-                        <Text style={styles.bullet}>•</Text>
-                        <Text style={[styles.bullet, styles.bulletText]}>{item.content}</Text>
+                      <View key={iIdx} style={styles.bulletContainer}>
+                        <Text style={styles.bulletPoint}>•</Text>
+                        <Text style={styles.bulletText}>{item.content}</Text>
                       </View>
                     );
                   }

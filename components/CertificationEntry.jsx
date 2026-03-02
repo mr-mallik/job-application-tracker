@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { Award, Building2, Calendar, Hash, Link2, X } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Award, Building2, Calendar, Hash, Link2, X } from 'lucide-react';
 
 export function CertificationEntry({ certification, onChange, onRemove }) {
   return (
@@ -15,9 +15,7 @@ export function CertificationEntry({ certification, onChange, onRemove }) {
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <Award className="w-5 h-5 text-primary" />
             </div>
-            <CardTitle className="text-base">
-              {certification.name || 'New Certification'}
-            </CardTitle>
+            <CardTitle className="text-base">{certification.name || 'New Certification'}</CardTitle>
           </div>
           <Button
             variant="ghost"
@@ -122,5 +120,5 @@ export function CertificationEntry({ certification, onChange, onRemove }) {
         </p>
       </CardContent>
     </Card>
-  )
+  );
 }

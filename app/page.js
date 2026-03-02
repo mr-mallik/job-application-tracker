@@ -1,25 +1,25 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { Loader2, Briefcase } from 'lucide-react'
-import { AuthPage } from '@/components/AuthPage'
-import { Dashboard } from '@/components/Dashboard'
-import { Header } from '@/components/Header'
+import { useState, useEffect } from 'react';
+import { Loader2, Briefcase } from 'lucide-react';
+import { AuthPage } from '@/components/AuthPage';
+import { Dashboard } from '@/components/Dashboard';
+import { Header } from '@/components/Header';
 
 export default function App() {
-  const [user, setUser] = useState(null)
-  const [token, setToken] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [user, setUser] = useState(null);
+  const [token, setToken] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const t = localStorage.getItem('token')
-    const u = localStorage.getItem('user')
-    if (t && u) { 
-      setToken(t)
-      setUser(JSON.parse(u)) 
+    const t = localStorage.getItem('token');
+    const u = localStorage.getItem('user');
+    if (t && u) {
+      setToken(t);
+      setUser(JSON.parse(u));
     }
-    setLoading(false)
-  }, [])
+    setLoading(false);
+  }, []);
 
   if (loading) {
     return (
@@ -39,34 +39,41 @@ export default function App() {
           </div>
         </div>
       </div>
-    )
+    );
   }
-  
+
   if (!user) {
-    return <AuthPage onLogin={(u, t) => { setUser(u); setToken(t); }} />
-  }
-  
-  return (
-    <>
-      <Header 
-        user={user} 
-        currentPath="/"
-        onLogout={() => { 
-          localStorage.clear()
-          setUser(null)
-          setToken(null)
+    return (
+      <AuthPage
+        onLogin={(u, t) => {
+          setUser(u);
+          setToken(t);
         }}
       />
-      <Dashboard 
-        user={user} 
-        token={token} 
-        onLogout={() => { 
-          localStorage.clear()
-          setUser(null)
-          setToken(null)
-        }} 
+    );
+  }
+
+  return (
+    <>
+      <Header
+        user={user}
+        currentPath="/"
+        onLogout={() => {
+          localStorage.clear();
+          setUser(null);
+          setToken(null);
+        }}
+      />
+      <Dashboard
+        user={user}
+        token={token}
+        onLogout={() => {
+          localStorage.clear();
+          setUser(null);
+          setToken(null);
+        }}
         onUserUpdate={setUser}
       />
     </>
-  )
+  );
 }

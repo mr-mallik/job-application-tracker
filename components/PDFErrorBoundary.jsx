@@ -1,24 +1,24 @@
-'use client'
+'use client';
 
-import React from 'react'
-import { AlertCircle } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import React from 'react';
+import { AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 class PDFErrorBoundary extends React.Component {
   constructor(props) {
-    super(props)
-    this.state = { hasError: false, error: null }
+    super(props);
+    this.state = { hasError: false, error: null };
   }
 
   static getDerivedStateFromError(error) {
     // Handle undefined errors thrown by react-pdf
-    const safeError = error || new Error('Unknown PDF rendering error')
-    return { hasError: true, error: safeError }
+    const safeError = error || new Error('Unknown PDF rendering error');
+    return { hasError: true, error: safeError };
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('PDF Rendering Error:', error || 'undefined error', errorInfo)
+    console.error('PDF Rendering Error:', error || 'undefined error', errorInfo);
   }
 
   render() {
@@ -35,9 +35,9 @@ class PDFErrorBoundary extends React.Component {
                 <li>Special characters causing issues</li>
                 <li>Content exceeding page limits</li>
               </ul>
-              <Button 
-                size="sm" 
-                variant="outline" 
+              <Button
+                size="sm"
+                variant="outline"
                 onClick={() => this.setState({ hasError: false, error: null })}
               >
                 Try Again
@@ -45,11 +45,11 @@ class PDFErrorBoundary extends React.Component {
             </AlertDescription>
           </Alert>
         </div>
-      )
+      );
     }
 
-    return this.props.children
+    return this.props.children;
   }
 }
 
-export default PDFErrorBoundary
+export default PDFErrorBoundary;

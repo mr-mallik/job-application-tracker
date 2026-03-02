@@ -1,94 +1,149 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
-import { Separator } from '@/components/ui/separator'
-import { Briefcase, Loader2, ArrowLeft, Mail, Lock, User as UserIcon, KeyRound } from 'lucide-react'
-import { ThemeToggle } from '@/components/theme-toggle'
+import { useState } from 'react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+  CardFooter,
+} from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import {
+  Briefcase,
+  Loader2,
+  ArrowLeft,
+  Mail,
+  Lock,
+  User as UserIcon,
+  KeyRound,
+} from 'lucide-react';
+import { ThemeToggle } from '@/components/theme-toggle';
 
 export function AuthPage({ onLogin }) {
-  const [isLogin, setIsLogin] = useState(true)
-  const [isVerifying, setIsVerifying] = useState(false)
-  const [isForgotPassword, setIsForgotPassword] = useState(false)
-  const [isResetting, setIsResetting] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [name, setName] = useState('')
-  const [code, setCode] = useState('')
-  const [newPassword, setNewPassword] = useState('')
+  const [isLogin, setIsLogin] = useState(true);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isForgotPassword, setIsForgotPassword] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
 
   const handleRegister = async (e) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
     try {
-      const res = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, name }) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      toast.success('Registration successful! Check console for verification code.')
-      setIsVerifying(true)
-    } catch (error) { toast.error(error.message) } finally { setLoading(false) }
-  }
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password, name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success('Registration successful! Check console for verification code.');
+      setIsVerifying(true);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleVerify = async (e) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
     try {
-      const res = await fetch('/api/auth/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, code }) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      toast.success('Email verified successfully!')
-      setIsVerifying(false)
-      setIsLogin(true)
-      setCode('')
-    } catch (error) { toast.error(error.message) } finally { setLoading(false) }
-  }
+      const res = await fetch('/api/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success('Email verified successfully!');
+      setIsVerifying(false);
+      setIsLogin(true);
+      setCode('');
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogin = async (e) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
     try {
-      const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      localStorage.setItem('token', data.token)
-      localStorage.setItem('user', JSON.stringify(data.user))
-      toast.success('Welcome back!')
-      onLogin(data.user, data.token)
-    } catch (error) { toast.error(error.message) } finally { setLoading(false) }
-  }
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      localStorage.setItem('token', data.token);
+      localStorage.setItem('user', JSON.stringify(data.user));
+      toast.success('Welcome back!');
+      onLogin(data.user, data.token);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleForgotPassword = async (e) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
     try {
-      const res = await fetch('/api/auth/forgot-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email }) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      toast.success('Reset code sent! Check console.')
-      setIsResetting(true)
-    } catch (error) { toast.error(error.message) } finally { setLoading(false) }
-  }
+      const res = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success('Reset code sent! Check console.');
+      setIsResetting(true);
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleResetPassword = async (e) => {
-    e.preventDefault()
-    setLoading(true)
+    e.preventDefault();
+    setLoading(true);
     try {
-      const res = await fetch('/api/auth/reset-password', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, code, newPassword }) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error)
-      toast.success('Password reset successfully!')
-      setIsForgotPassword(false)
-      setIsResetting(false)
-      setIsLogin(true)
-      setCode('')
-      setNewPassword('')
-    } catch (error) { toast.error(error.message) } finally { setLoading(false) }
-  }
+      const res = await fetch('/api/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, code, newPassword }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      toast.success('Password reset successfully!');
+      setIsForgotPassword(false);
+      setIsResetting(false);
+      setIsLogin(true);
+      setCode('');
+      setNewPassword('');
+    } catch (error) {
+      toast.error(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 dark:from-gray-950 dark:via-gray-900 dark:to-gray-950 p-4 relative overflow-hidden transition-colors duration-300">
@@ -109,30 +164,39 @@ export function AuthPage({ onLogin }) {
             <Briefcase className="w-8 h-8 text-primary-foreground" />
           </div>
           <div className="space-y-2">
-            <CardTitle className="text-3xl font-bold tracking-tight">Job Application Tracker</CardTitle>
+            <CardTitle className="text-3xl font-bold tracking-tight">
+              Job Application Tracker
+            </CardTitle>
             <CardDescription className="text-base">
-              {isVerifying ? 'Verify your email address' : 
-               isForgotPassword ? (isResetting ? 'Create a new password' : 'Reset your password') : 
-               isLogin ? 'Sign in to your account' : 
-               'Create your account'}
+              {isVerifying
+                ? 'Verify your email address'
+                : isForgotPassword
+                  ? isResetting
+                    ? 'Create a new password'
+                    : 'Reset your password'
+                  : isLogin
+                    ? 'Sign in to your account'
+                    : 'Create your account'}
             </CardDescription>
           </div>
         </CardHeader>
-        
+
         <CardContent className="space-y-6 px-6">
           {isVerifying ? (
             <form onSubmit={handleVerify} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="code" className="text-sm font-medium">Verification Code</Label>
+                <Label htmlFor="code" className="text-sm font-medium">
+                  Verification Code
+                </Label>
                 <div className="relative">
                   <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     id="code"
                     className="pl-10 h-11"
-                    placeholder="Enter verification code" 
-                    value={code} 
-                    onChange={(e) => setCode(e.target.value.toUpperCase())} 
-                    required 
+                    placeholder="Enter verification code"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value.toUpperCase())}
+                    required
                   />
                 </div>
                 <p className="text-xs text-muted-foreground">Enter the code sent to {email}</p>
@@ -141,7 +205,12 @@ export function AuthPage({ onLogin }) {
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {loading ? 'Verifying...' : 'Verify Email'}
               </Button>
-              <Button type="button" variant="ghost" className="w-full" onClick={() => setIsVerifying(false)}>
+              <Button
+                type="button"
+                variant="ghost"
+                className="w-full"
+                onClick={() => setIsVerifying(false)}
+              >
                 <ArrowLeft className="mr-2 h-4 w-4" />
                 Back to registration
               </Button>
@@ -150,31 +219,35 @@ export function AuthPage({ onLogin }) {
             isResetting ? (
               <form onSubmit={handleResetPassword} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="reset-code" className="text-sm font-medium">Reset Code</Label>
+                  <Label htmlFor="reset-code" className="text-sm font-medium">
+                    Reset Code
+                  </Label>
                   <div className="relative">
                     <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
+                    <Input
                       id="reset-code"
                       className="pl-10 h-11"
                       placeholder="Enter reset code"
-                      value={code} 
-                      onChange={(e) => setCode(e.target.value.toUpperCase())} 
-                      required 
+                      value={code}
+                      onChange={(e) => setCode(e.target.value.toUpperCase())}
+                      required
                     />
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="new-password" className="text-sm font-medium">New Password</Label>
+                  <Label htmlFor="new-password" className="text-sm font-medium">
+                    New Password
+                  </Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
+                    <Input
                       id="new-password"
                       className="pl-10 h-11"
-                      type="password" 
+                      type="password"
                       placeholder="Enter new password"
-                      value={newPassword} 
-                      onChange={(e) => setNewPassword(e.target.value)} 
-                      required 
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
                     />
                   </div>
                 </div>
@@ -182,7 +255,15 @@ export function AuthPage({ onLogin }) {
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {loading ? 'Resetting...' : 'Reset Password'}
                 </Button>
-                <Button type="button" variant="ghost" className="w-full" onClick={() => { setIsForgotPassword(false); setIsResetting(false); }}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => {
+                    setIsForgotPassword(false);
+                    setIsResetting(false);
+                  }}
+                >
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back to login
                 </Button>
@@ -190,26 +271,33 @@ export function AuthPage({ onLogin }) {
             ) : (
               <form onSubmit={handleForgotPassword} className="space-y-5">
                 <div className="space-y-2">
-                  <Label htmlFor="forgot-email" className="text-sm font-medium">Email Address</Label>
+                  <Label htmlFor="forgot-email" className="text-sm font-medium">
+                    Email Address
+                  </Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input 
+                    <Input
                       id="forgot-email"
                       className="pl-10 h-11"
-                      type="email" 
+                      type="email"
                       placeholder="you@example.com"
-                      value={email} 
-                      onChange={(e) => setEmail(e.target.value)} 
-                      required 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
                     />
                   </div>
-                  <p className="text-xs text-muted-foreground">We'll send you a reset code</p>
+                  <p className="text-xs text-muted-foreground">We&apos;ll send you a reset code</p>
                 </div>
                 <Button type="submit" className="w-full h-11 font-medium" disabled={loading}>
                   {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   {loading ? 'Sending...' : 'Send Reset Code'}
                 </Button>
-                <Button type="button" variant="ghost" className="w-full" onClick={() => setIsForgotPassword(false)}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => setIsForgotPassword(false)}
+                >
                   <ArrowLeft className="mr-2 h-4 w-4" />
                   Back to login
                 </Button>
@@ -218,45 +306,53 @@ export function AuthPage({ onLogin }) {
           ) : isLogin ? (
             <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="email" className="text-sm font-medium">Email Address</Label>
+                <Label htmlFor="email" className="text-sm font-medium">
+                  Email Address
+                </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     id="email"
                     className="pl-10 h-11"
-                    type="email" 
-                    placeholder="you@example.com" 
-                    value={email} 
-                    onChange={(e) => setEmail(e.target.value)} 
-                    required 
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
                     autoComplete="email"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password" className="text-sm font-medium">Password</Label>
+                <Label htmlFor="password" className="text-sm font-medium">
+                  Password
+                </Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     id="password"
                     className="pl-10 h-11"
-                    type="password" 
+                    type="password"
                     placeholder="Enter your password"
-                    value={password} 
-                    onChange={(e) => setPassword(e.target.value)} 
-                    required 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
                     autoComplete="current-password"
                   />
                 </div>
               </div>
-              <Button type="submit" className="w-full h-11 font-medium shadow-md hover:shadow-lg transition-shadow" disabled={loading}>
+              <Button
+                type="submit"
+                className="w-full h-11 font-medium shadow-md hover:shadow-lg transition-shadow"
+                disabled={loading}
+              >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
               <div className="flex items-center justify-center text-sm gap-1 text-muted-foreground">
-                <button 
-                  type="button" 
-                  className="text-primary hover:underline font-medium transition-colors" 
+                <button
+                  type="button"
+                  className="text-primary hover:underline font-medium transition-colors"
                   onClick={() => setIsForgotPassword(true)}
                 >
                   Forgot password?
@@ -264,10 +360,10 @@ export function AuthPage({ onLogin }) {
               </div>
               <Separator className="my-4" />
               <div className="text-center text-sm text-muted-foreground">
-                Don't have an account?{' '}
-                <button 
-                  type="button" 
-                  className="text-primary hover:underline font-medium transition-colors" 
+                Don&apos;t have an account?{' '}
+                <button
+                  type="button"
+                  className="text-primary hover:underline font-medium transition-colors"
                   onClick={() => setIsLogin(false)}
                 >
                   Create one
@@ -277,63 +373,75 @@ export function AuthPage({ onLogin }) {
           ) : (
             <form onSubmit={handleRegister} className="space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="signup-name" className="text-sm font-medium">Full Name</Label>
+                <Label htmlFor="signup-name" className="text-sm font-medium">
+                  Full Name
+                </Label>
                 <div className="relative">
                   <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     id="signup-name"
                     className="pl-10 h-11"
-                    placeholder="John Doe" 
-                    value={name} 
-                    onChange={(e) => setName(e.target.value)} 
-                    required 
+                    placeholder="John Doe"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    required
                     autoComplete="name"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="signup-email" className="text-sm font-medium">Email Address</Label>
+                <Label htmlFor="signup-email" className="text-sm font-medium">
+                  Email Address
+                </Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     id="signup-email"
                     className="pl-10 h-11"
-                    type="email" 
-                    placeholder="you@example.com" 
-                    value={email} 
-                    onChange={(e) => setEmail(e.target.value)} 
-                    required 
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
                     autoComplete="email"
                   />
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="signup-password" className="text-sm font-medium">Password</Label>
+                <Label htmlFor="signup-password" className="text-sm font-medium">
+                  Password
+                </Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input 
+                  <Input
                     id="signup-password"
                     className="pl-10 h-11"
-                    type="password" 
+                    type="password"
                     placeholder="Create a strong password"
-                    value={password} 
-                    onChange={(e) => setPassword(e.target.value)} 
-                    required 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
                     autoComplete="new-password"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground">Use 8+ characters with a mix of letters & numbers</p>
+                <p className="text-xs text-muted-foreground">
+                  Use 8+ characters with a mix of letters & numbers
+                </p>
               </div>
-              <Button type="submit" className="w-full h-11 font-medium shadow-md hover:shadow-lg transition-shadow" disabled={loading}>
+              <Button
+                type="submit"
+                className="w-full h-11 font-medium shadow-md hover:shadow-lg transition-shadow"
+                disabled={loading}
+              >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {loading ? 'Creating account...' : 'Create Account'}
               </Button>
               <Separator className="my-4" />
               <div className="text-center text-sm text-muted-foreground">
                 Already have an account?{' '}
-                <button 
-                  type="button" 
-                  className="text-primary hover:underline font-medium transition-colors" 
+                <button
+                  type="button"
+                  className="text-primary hover:underline font-medium transition-colors"
                   onClick={() => setIsLogin(true)}
                 >
                   Sign in
@@ -344,6 +452,5 @@ export function AuthPage({ onLogin }) {
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
-

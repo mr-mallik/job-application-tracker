@@ -1,13 +1,25 @@
-'use client'
+'use client';
 
-import { useState, useEffect, useRef } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Button } from '@/components/ui/button'
-import { useToast } from '@/hooks/use-toast'
-import { User, Mail, Phone, MapPin, Linkedin, Link2, Briefcase, Sparkles, Upload, RefreshCw, Save } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import {
+  User,
+  Mail,
+  Phone,
+  MapPin,
+  Linkedin,
+  Link2,
+  Briefcase,
+  Sparkles,
+  Upload,
+  RefreshCw,
+  Save,
+} from 'lucide-react';
 
 export default function BasicInformationPage() {
   const [profile, setProfile] = useState({
@@ -18,27 +30,27 @@ export default function BasicInformationPage() {
     location: '',
     linkedin: '',
     portfolio: '',
-    summary: ''
-  })
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [parsing, setParsing] = useState(false)
-  const fileInputRef = useRef(null)
-  const { toast } = useToast()
+    summary: '',
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [parsing, setParsing] = useState(false);
+  const fileInputRef = useRef(null);
+  const { toast } = useToast();
 
   useEffect(() => {
-    loadProfile()
-  }, [])
+    loadProfile();
+  }, []);
 
   const loadProfile = async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (response.ok) {
-        const data = await response.json()
+        const data = await response.json();
         setProfile({
           name: data.user.name || '',
           headline: data.user.profile?.headline || '',
@@ -47,26 +59,26 @@ export default function BasicInformationPage() {
           location: data.user.profile?.location || '',
           linkedin: data.user.profile?.linkedin || '',
           portfolio: data.user.profile?.portfolio || '',
-          summary: data.user.profile?.summary || ''
-        })
+          summary: data.user.profile?.summary || '',
+        });
       }
     } catch (error) {
-      console.error('Failed to load profile:', error)
-      toast({ title: 'Error', description: 'Failed to load profile data', variant: 'destructive' })
+      console.error('Failed to load profile:', error);
+      toast({ title: 'Error', description: 'Failed to load profile data', variant: 'destructive' });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSave = async () => {
-    setSaving(true)
+    setSaving(true);
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/auth/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           name: profile.name,
@@ -76,56 +88,60 @@ export default function BasicInformationPage() {
             location: profile.location,
             linkedin: profile.linkedin,
             portfolio: profile.portfolio,
-            summary: profile.summary
-          }
-        })
-      })
+            summary: profile.summary,
+          },
+        }),
+      });
 
       if (response.ok) {
-        toast({ title: 'Success', description: 'Basic information saved successfully' })
+        toast({ title: 'Success', description: 'Basic information saved successfully' });
       } else {
-        const data = await response.json()
-        toast({ title: 'Error', description: data.error || 'Failed to save profile', variant: 'destructive' })
+        const data = await response.json();
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to save profile',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
-      console.error('Save error:', error)
-      toast({ title: 'Error', description: 'Failed to save profile', variant: 'destructive' })
+      console.error('Save error:', error);
+      toast({ title: 'Error', description: 'Failed to save profile', variant: 'destructive' });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
+    const file = e.target.files?.[0];
+    if (!file) return;
 
     if (file.type !== 'application/pdf') {
-      toast({ title: 'Error', description: 'Please upload a PDF file', variant: 'destructive' })
-      return
+      toast({ title: 'Error', description: 'Please upload a PDF file', variant: 'destructive' });
+      return;
     }
 
-    setParsing(true)
+    setParsing(true);
     try {
-      const reader = new FileReader()
+      const reader = new FileReader();
       reader.onload = async (event) => {
-        const base64Content = event.target.result.split(',')[1]
-        
-        const token = localStorage.getItem('token')
+        const base64Content = event.target.result.split(',')[1];
+
+        const token = localStorage.getItem('token');
         const response = await fetch('/api/auth/parse-resume', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ base64Content })
-        })
+          body: JSON.stringify({ base64Content }),
+        });
 
         if (response.ok) {
-          const data = await response.json()
-          const parsed = data.profileData
-          
+          const data = await response.json();
+          const parsed = data.profileData;
+
           // Update basic information fields
-          setProfile(prev => ({
+          setProfile((prev) => ({
             ...prev,
             name: parsed.name || prev.name,
             headline: parsed.headline || prev.headline,
@@ -133,34 +149,39 @@ export default function BasicInformationPage() {
             location: parsed.location || prev.location,
             linkedin: parsed.linkedin || prev.linkedin,
             portfolio: parsed.portfolio || prev.portfolio,
-            summary: parsed.summary || prev.summary
-          }))
-          
-          toast({ 
-            title: 'Success', 
-            description: 'Resume parsed! Basic information fields updated. Check other sections for more data.' 
-          })
+            summary: parsed.summary || prev.summary,
+          }));
+
+          toast({
+            title: 'Success',
+            description:
+              'Resume parsed! Basic information fields updated. Check other sections for more data.',
+          });
         } else {
-          const data = await response.json()
-          toast({ title: 'Error', description: data.error || 'Failed to parse resume', variant: 'destructive' })
+          const data = await response.json();
+          toast({
+            title: 'Error',
+            description: data.error || 'Failed to parse resume',
+            variant: 'destructive',
+          });
         }
-        
-        setParsing(false)
-      }
-      reader.readAsDataURL(file)
+
+        setParsing(false);
+      };
+      reader.readAsDataURL(file);
     } catch (error) {
-      console.error('Parse error:', error)
-      toast({ title: 'Error', description: 'Failed to parse resume', variant: 'destructive' })
-      setParsing(false)
+      console.error('Parse error:', error);
+      toast({ title: 'Error', description: 'Failed to parse resume', variant: 'destructive' });
+      setParsing(false);
     }
-  }
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <RefreshCw className="w-8 h-8 animate-spin text-primary" />
       </div>
-    )
+    );
   }
 
   return (
@@ -168,7 +189,9 @@ export default function BasicInformationPage() {
       {/* Page Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Basic Information</h1>
-        <p className="text-muted-foreground mt-1">Manage your personal details and professional summary</p>
+        <p className="text-muted-foreground mt-1">
+          Manage your personal details and professional summary
+        </p>
       </div>
 
       {/* AI Import Section */}
@@ -192,16 +215,22 @@ export default function BasicInformationPage() {
                 onChange={handleFileUpload}
                 className="hidden"
               />
-              <Button 
-                size="sm" 
+              <Button
+                size="sm"
                 variant="default"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={parsing}
               >
                 {parsing ? (
-                  <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Parsing...</>
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Parsing...
+                  </>
                 ) : (
-                  <><Upload className="w-4 h-4 mr-2" />Upload PDF</>
+                  <>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload PDF
+                  </>
                 )}
               </Button>
             </div>
@@ -242,14 +271,11 @@ export default function BasicInformationPage() {
               <Label htmlFor="email">Email Address *</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                <Input
-                  id="email"
-                  value={profile.email}
-                  disabled
-                  className="pl-10 bg-muted/50"
-                />
+                <Input id="email" value={profile.email} disabled className="pl-10 bg-muted/50" />
               </div>
-              <p className="text-xs text-muted-foreground">Email cannot be changed after registration</p>
+              <p className="text-xs text-muted-foreground">
+                Email cannot be changed after registration
+              </p>
             </div>
 
             {/* Phone */}
@@ -310,7 +336,9 @@ export default function BasicInformationPage() {
                 className="pl-10"
               />
             </div>
-            <p className="text-xs text-muted-foreground">A brief title that describes your professional identity</p>
+            <p className="text-xs text-muted-foreground">
+              A brief title that describes your professional identity
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -357,7 +385,8 @@ export default function BasicInformationPage() {
               className="resize-none font-mono text-sm"
             />
             <p className="text-xs text-muted-foreground">
-              Tip: Write 3-4 sentences highlighting your experience, strengths, and what you're looking for
+              Tip: Write 3-4 sentences highlighting your experience, strengths, and what you&apos;re
+              looking for
             </p>
           </div>
         </CardContent>
@@ -367,12 +396,18 @@ export default function BasicInformationPage() {
       <div className="flex justify-end gap-2 pb-6">
         <Button onClick={handleSave} disabled={saving || !profile.name} className="min-w-[140px]">
           {saving ? (
-            <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+            <>
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              Saving...
+            </>
           ) : (
-            <><Save className="w-4 h-4 mr-2" />Save Changes</>
+            <>
+              <Save className="w-4 h-4 mr-2" />
+              Save Changes
+            </>
           )}
         </Button>
       </div>
     </div>
-  )
+  );
 }

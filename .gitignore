@@ -3,6 +3,7 @@
 # IDE and editors
 .idea/
 .vscode/
+.husky/
 
 # Dependencies
 node_modules/

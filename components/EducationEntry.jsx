@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
-import { GraduationCap, Building2, MapPin, Calendar, X, BookOpen, Hash } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { GraduationCap, Building2, MapPin, Calendar, X, BookOpen, Hash } from 'lucide-react';
 
 export function EducationEntry({ education, onChange, onRemove }) {
   return (
@@ -15,9 +15,7 @@ export function EducationEntry({ education, onChange, onRemove }) {
             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
               <GraduationCap className="w-5 h-5 text-primary" />
             </div>
-            <CardTitle className="text-base">
-              {education.degree || 'New Education Entry'}
-            </CardTitle>
+            <CardTitle className="text-base">{education.degree || 'New Education Entry'}</CardTitle>
           </div>
           <Button
             variant="ghost"
@@ -121,5 +119,5 @@ export function EducationEntry({ education, onChange, onRemove }) {
         </p>
       </CardContent>
     </Card>
-  )
+  );
 }

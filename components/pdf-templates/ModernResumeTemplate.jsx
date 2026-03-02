@@ -170,7 +170,7 @@ export default function ModernResumeTemplate({ data }) {
             const isSkillsSection = section.title.toLowerCase().includes('skill');
 
             return (
-              <View key={sIdx} style={styles.section} wrap={false}>
+              <View key={sIdx} style={styles.section}>
                 <Text style={styles.sectionTitle}>{section.title}</Text>
 
                 {isSkillsSection && section.items ? (
@@ -198,7 +198,7 @@ export default function ModernResumeTemplate({ data }) {
 
                     if (item.type === 'subheading') {
                       return (
-                        <View key={iIdx} style={styles.itemContainer}>
+                        <View key={iIdx} style={styles.itemContainer} wrap={false}>
                           <Text style={styles.subheading}>{item.content}</Text>
                         </View>
                       );

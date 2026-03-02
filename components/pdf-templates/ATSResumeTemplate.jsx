@@ -4,29 +4,32 @@ import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/rendere
 // ATS-Friendly Resume Template - Clean, simple, machine-readable
 const styles = StyleSheet.create({
   page: {
-    padding: 40,
+    padding: 30,
     fontSize: 11,
     fontFamily: 'Helvetica',
-    lineHeight: 1.4,
+    lineHeight: 1,
   },
   header: {
-    marginBottom: 20,
+    marginBottom: 15,
     textAlign: 'center',
   },
   name: {
+    letterSpacing: 0.5,
     fontSize: 24,
     fontFamily: 'Helvetica-Bold',
-    marginBottom: 20,
+    marginBottom: 15,
     textAlign: 'center',
     textTransform: 'uppercase',
   },
   designation: {
-    fontSize: 13,
+    marginTop: 6,
+    fontSize: 10,
     color: '#374151',
-    marginBottom: 10,
+    marginBottom: 2,
     textAlign: 'center',
   },
   contactRow: {
+    fontSize: 10,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'center',
@@ -45,11 +48,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   sectionTitle: {
+    letterSpacing: 0.7,
     fontSize: 13,
     fontFamily: 'Helvetica-Bold',
     textTransform: 'uppercase',
-    marginBottom: 8,
-    paddingBottom: 4,
+    marginBottom: 2,
+    paddingBottom: 8,
     borderBottom: '1 solid #E5E7EB',
   },
   itemContainer: {
@@ -58,17 +62,15 @@ const styles = StyleSheet.create({
   subheading: {
     fontSize: 11,
     fontFamily: 'Helvetica-Bold',
-    marginBottom: 3,
+    marginTop: 8,
   },
   text: {
     fontSize: 10,
-    marginBottom: 2,
     color: '#374151',
   },
   bulletContainer: {
     flexDirection: 'row',
     marginBottom: 3,
-    marginLeft: 12,
   },
   bulletPoint: {
     width: 15,
@@ -154,7 +156,7 @@ export default function ATSResumeTemplate({ data }) {
         {/* Content Sections */}
         {sections &&
           sections.map((section, sIdx) => (
-            <View key={sIdx} style={styles.section} wrap={false}>
+            <View key={sIdx} style={styles.section}>
               <Text style={styles.sectionTitle}>{section.title || 'Section'}</Text>
 
               {section.items &&
@@ -163,7 +165,7 @@ export default function ATSResumeTemplate({ data }) {
 
                   if (item.type === 'subheading') {
                     return (
-                      <View key={iIdx} style={styles.itemContainer}>
+                      <View key={iIdx} style={styles.itemContainer} wrap={false}>
                         <Text style={styles.subheading}>{item.content}</Text>
                       </View>
                     );

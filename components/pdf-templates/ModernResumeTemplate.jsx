@@ -136,9 +136,10 @@ export default function ModernResumeTemplate({ data }) {
               {isSkillsSection && section.items ? (
                 <View style={styles.skillsRow}>
                   {section.items
-                    .filter(item => item.type === 'text' || item.type === 'skill')
+                    .filter(item => item && (item.type === 'text' || item.type === 'skill'))
                     .map((item, iIdx) => {
                       // Split comma-separated skills
+                      if (!item.content) return null
                       const skills = item.content.split(',').map(s => s.trim()).filter(Boolean)
                       return skills.map((skill, sIdx) => (
                         <Text key={`${iIdx}-${sIdx}`} style={styles.skillBadge}>
@@ -149,6 +150,8 @@ export default function ModernResumeTemplate({ data }) {
                 </View>
               ) : (
                 section.items && section.items.map((item, iIdx) => {
+                  if (!item || !item.content) return null
+                  
                   if (item.type === 'subheading') {
                     return (
                       <View key={iIdx} style={styles.itemContainer}>

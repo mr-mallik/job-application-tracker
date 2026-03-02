@@ -29,11 +29,11 @@ const PDFDownloadLink = dynamic(
   { ssr: false }
 )
 
-// Dynamic import for templates
-const ATSResumeTemplate = dynamic(() => import('@/components/pdf-templates/ATSResumeTemplate'), { ssr: false })
-const ModernResumeTemplate = dynamic(() => import('@/components/pdf-templates/ModernResumeTemplate'), { ssr: false })
-const CreativeResumeTemplate = dynamic(() => import('@/components/pdf-templates/CreativeResumeTemplate'), { ssr: false })
-const CoverLetterTemplate = dynamic(() => import('@/components/pdf-templates/CoverLetterTemplate'), { ssr: false })
+// Direct imports for templates (dynamic imports break react-pdf rendering)
+import ATSResumeTemplate from '@/components/pdf-templates/ATSResumeTemplate'
+import ModernResumeTemplate from '@/components/pdf-templates/ModernResumeTemplate'
+import CreativeResumeTemplate from '@/components/pdf-templates/CreativeResumeTemplate'
+import CoverLetterTemplate from '@/components/pdf-templates/CoverLetterTemplate'
 
 export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, userProfile, onClose }) {
   const docConfig = {
@@ -73,28 +73,77 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
 
   // Parse content for PDF rendering with validation
   const parsedData = useMemo(() => {
+    
+    
+    
+    
     try {
       if (!previewContent || previewContent.trim().length === 0) {
+        
         return null
       }
       
       if (documentType === 'resume') {
+        
         const parsed = parseResumeMarkdown(previewContent)
-        // Validate structure
+        )
+        
+        // Validate structure and content
         if (!parsed || !parsed.sections || !Array.isArray(parsed.sections)) {
+          console.error('❌ Invalid parsed structure:', parsed)
           return null
         }
-        return parsed
+        // Ensure sections have valid content
+        const validSections = parsed.sections.filter(s => 
+          s && s.title && Array.isArray(s.items)
+        )
+        
+        
+        if (validSections.length === 0) {
+          console.error('❌ No valid sections after filtering')
+          return null
+        }
+        // Ensure all items have content property
+        validSections.forEach(section => {
+          const beforeCount = section.items.length
+          section.items = section.items.filter(item => 
+            item && item.content && typeof item.content === 'string'
+          )
+          const afterCount = section.items.length
+          if (beforeCount !== afterCount) {
+            
+          }
+        })
+        
+        const result = { ...parsed, sections: validSections }
+        
+        return result
       } else {
+        
         const parsed = parseDocumentMarkdown(previewContent)
-        // Validate structure
+        
+        
+        // Validate structure and content
         if (!parsed || !parsed.paragraphs || !Array.isArray(parsed.paragraphs)) {
+          console.error('❌ Invalid paragraph structure')
           return null
         }
-        return parsed
+        // Ensure paragraphs have valid content
+        const validParagraphs = parsed.paragraphs.filter(p => 
+          p && p.content && typeof p.content === 'string'
+        )
+        
+        
+        if (validParagraphs.length === 0) {
+          console.error('❌ No valid paragraphs')
+          return null
+        }
+        const result = { ...parsed, paragraphs: validParagraphs }
+        )
+        return result
       }
     } catch (error) {
-      console.error('PDF parsing error:', error)
+      console.error('❌ PDF parsing error:', error)
       return null
     }
   }, [previewContent, documentType])
@@ -178,26 +227,43 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
   }
 
   const generateFromProfile = useCallback(() => {
+    
+    
+    
+    
     if (!userProfile) {
+      console.error('❌ userProfile is null/undefined')
       toast.error('Profile data not available')
       return
     }
 
     let generated = ''
     if (documentType === 'resume') {
+      
       generated = generateResumeFromProfile(userProfile, selectedTemplate)
+      
+      )
     } else if (documentType === 'coverLetter') {
+      
       generated = generateCoverLetterTemplate(userProfile, job)
+      
+      )
     } else if (documentType === 'supportingStatement') {
+      
       generated = generateSupportingStatementTemplate(userProfile, job)
     }
 
+    
     setContent(generated)
     toast.success('Generated from profile!')
   }, [userProfile, documentType, selectedTemplate, job])
 
   const loadTemplate = () => {
+    
+    
     const template = getDefaultTemplate(documentType)
+    
+    )
     setContent(template)
     toast.success('Template loaded!')
   }
@@ -641,6 +707,15 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
                   transformOrigin: 'top center',
                   width: `${100 / (zoom / 100)}%`,
                 }}>
+                  {(() => {
+                    
+                    
+                    
+                    
+                    
+                    
+                    return null
+                  })()}
                   <PDFViewer width="100%" height="800" showToolbar={false} className="border-0 rounded shadow-lg">
                     {documentType === 'resume' ? (
                       <TemplateComponent data={parsedData} />
@@ -649,7 +724,14 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
                     )}
                   </PDFViewer>
                 </div>
-              ) : null}
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center text-muted-foreground max-w-md">
+                    <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p className="text-sm">Loading preview...</p>
+                  </div>
+                </div>
+              )}
             </PDFErrorBoundary>
           </div>
         </div>

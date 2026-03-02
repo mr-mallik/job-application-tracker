@@ -242,7 +242,7 @@ async function handleRoute(request, { params }) {
       
       try {
         const { parseResumePDF } = await import('@/lib/gemini')
-        console.log('[API] Parsing resume PDF with Gemini...')
+        
         const profileData = await parseResumePDF(base64Content)
         
         // Sort experiences and education chronologically (most recent first)
@@ -254,7 +254,7 @@ async function handleRoute(request, { params }) {
           })
         }
         
-        console.log('[API] Resume parsed successfully')
+        
         return handleCORS(NextResponse.json({ profileData }))
       } catch (error) {
         console.error('[API] Resume parsing error:', error)
@@ -338,16 +338,16 @@ async function handleRoute(request, { params }) {
       }
       
       try {
-        console.log(`[Scraper] Starting scrape for: ${url}`)
+        
         const jobBoard = detectJobBoard(url)
-        console.log(`[Scraper] Detected job board: ${jobBoard}`)
+        
         
         // Step 1: Use Browserless to fetch the page (handles JavaScript rendering)
-        console.log('[Scraper] Step 1: Fetching page with Browserless...')
+        
         const scrapedResult = await scrapeWithPlaywright(url)
         const { html, visibleText, method } = scrapedResult
-        console.log(`[Scraper] Page fetched using: ${method || 'unknown'}`)
-        console.log(`[Scraper] HTML length: ${html.length}, Text length: ${visibleText.length}`)
+        
+        
         
         // Validate we have sufficient content before proceeding
         if (!html || html.length < 1000 || !visibleText || visibleText.length < 500) {
@@ -358,12 +358,12 @@ async function handleRoute(request, { params }) {
         }
         
         // Step 2: Parse with Cheerio to extract structured data
-        console.log('[Scraper] Step 2: Parsing with Cheerio...')
+        
         const scrapedData = parseWithCheerio(html, url)
         scrapedData.visibleText = visibleText
-        console.log(`[Scraper] Extracted - Titles: ${scrapedData.possibleTitles.length}, Companies: ${scrapedData.possibleCompanies.length}`)
-        console.log('[Scraper] Possible Titles:', JSON.stringify(scrapedData.possibleTitles.slice(0, 5)))
-        console.log('[Scraper] Raw text excerpt:', scrapedData.rawText?.substring(0, 500) || visibleText?.substring(0, 500))
+        
+        ))
+         || visibleText?.substring(0, 500))
         
         // Validate we have meaningful data before calling Gemini
         const hasValidData = (
@@ -380,9 +380,9 @@ async function handleRoute(request, { params }) {
         }
         
         // Step 3: Use Gemini AI to classify and structure the data
-        console.log('[Scraper] Step 3: Classifying with Gemini AI...')
+        
         const jobDetails = await classifyJobData(scrapedData, url)
-        console.log(`[Scraper] Classification complete. Title: ${jobDetails.title}`)
+        
         
         return handleCORS(NextResponse.json({ 
           jobDetails,
@@ -422,13 +422,13 @@ async function handleRoute(request, { params }) {
       }
       
       try {
-        console.log(`[Text Extraction] Starting extraction from pasted text (${text.length} chars)`)
+        `)
         
         // Use Gemini AI to extract structured data from text
-        console.log('[Text Extraction] Extracting with Gemini AI...')
+        
         const { extractJobDetailsFromText } = await import('@/lib/gemini')
         const jobDetails = await extractJobDetailsFromText(text)
-        console.log(`[Text Extraction] Extraction complete. Title: ${jobDetails.title}`)
+        
         
         return handleCORS(NextResponse.json({ 
           jobDetails,
@@ -582,7 +582,7 @@ async function handleRoute(request, { params }) {
           closingDate: { $ne: null, $exists: true }
         }).toArray()
         
-        console.log(`[Reminders] Found ${jobs.length} jobs with reminders enabled`)
+        
         
         const remindersSent = []
         const errors = []
@@ -601,7 +601,7 @@ async function handleRoute(request, { params }) {
             
             // Skip if deadline has passed
             if (daysUntilDeadline < 0) {
-              console.log(`[Reminders] Skipping job ${job.id} - deadline passed`)
+              
               continue
             }
             
@@ -620,7 +620,7 @@ async function handleRoute(request, { params }) {
               // Get user email
               const user = await db.collection('users').findOne({ id: job.userId })
               if (!user || !user.email) {
-                console.log(`[Reminders] Skipping job ${job.id} - user not found`)
+                
                 continue
               }
               
@@ -683,7 +683,7 @@ Login to manage your applications: ${process.env.NEXT_PUBLIC_APP_URL || 'http://
                 userEmail: user.email
               })
               
-              console.log(`[Reminders] ✅ Sent reminder to ${user.email} for ${job.title} at ${job.company}`)
+              
             }
           } catch (error) {
             console.error(`[Reminders] Error processing job ${job.id}:`, error)

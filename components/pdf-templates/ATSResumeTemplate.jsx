@@ -76,7 +76,10 @@ const styles = StyleSheet.create({
 })
 
 export default function ATSResumeTemplate({ data }) {
-  const { header, sections } = data
+  )
+  const { header, sections } = data || {}
+  
+  
 
   return (
     <Document>
@@ -109,9 +112,11 @@ export default function ATSResumeTemplate({ data }) {
         {/* Content Sections */}
         {sections && sections.map((section, sIdx) => (
           <View key={sIdx} style={styles.section} wrap={false}>
-            <Text style={styles.sectionTitle}>{section.title}</Text>
+            <Text style={styles.sectionTitle}>{section.title || 'Section'}</Text>
             
             {section.items && section.items.map((item, iIdx) => {
+              if (!item || !item.content) return null
+              
               if (item.type === 'subheading') {
                 return (
                   <View key={iIdx} style={styles.itemContainer}>

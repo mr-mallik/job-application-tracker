@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
+import { renderContactLine } from '@/lib/pdfHelpers';
 
 // Creative Resume Template - Two-column layout with visual elements
 const styles = StyleSheet.create({
@@ -140,45 +141,11 @@ export default function CreativeResumeTemplate({ data }) {
               {header.name && <Text style={styles.name}>{header.name}</Text>}
               {header.designation && <Text style={styles.designation}>{header.designation}</Text>}
               {header.contact &&
-                header.contact.map((contact, idx) => {
-                  // Parse markdown link syntax [text](url)
-                  const markdownLinkMatch = contact.match(/\[([^\]]+)\]\(([^)]+)\)/);
-                  if (markdownLinkMatch) {
-                    const [fullMatch, linkText, url] = markdownLinkMatch;
-                    const beforeLink = contact.substring(0, contact.indexOf(fullMatch));
-                    const afterLink = contact.substring(
-                      contact.indexOf(fullMatch) + fullMatch.length
-                    );
-                    return (
-                      <Text key={idx} style={styles.contact}>
-                        {beforeLink}
-                        <Link src={url} style={styles.link}>
-                          {linkText}
-                        </Link>
-                        {afterLink}
-                      </Text>
-                    );
-                  }
-                  // Check if contact contains plain URL
-                  const urlMatch = contact.match(/(https?:\/\/[^\s]+)/);
-                  if (urlMatch) {
-                    const parts = contact.split(urlMatch[1]);
-                    return (
-                      <Text key={idx} style={styles.contact}>
-                        {parts[0]}
-                        <Link src={urlMatch[1]} style={styles.link}>
-                          {urlMatch[1].replace(/https?:\/\/(www\.)?/, '')}
-                        </Link>
-                        {parts[1]}
-                      </Text>
-                    );
-                  }
-                  return (
-                    <Text key={idx} style={styles.contact}>
-                      {contact}
-                    </Text>
-                  );
-                })}
+                header.contact.map((contact, idx) =>
+                  renderContactLine(contact, idx, header.contact.length, styles, false, (url) =>
+                    url.replace(/https?:\/\/(www\.)?/, '')
+                  )
+                )}
             </View>
           )}
 

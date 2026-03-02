@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
+import { renderContactLine } from '@/lib/pdfHelpers';
 
 // Modern Resume Template - Visual design with accent colors
 const styles = StyleSheet.create({
@@ -116,48 +117,11 @@ export default function ModernResumeTemplate({ data }) {
             {header.designation && <Text style={styles.designation}>{header.designation}</Text>}
             {header.contact && header.contact.length > 0 && (
               <View style={styles.contactRow}>
-                {header.contact.map((contact, idx) => {
-                  // Parse markdown link syntax [text](url)
-                  const markdownLinkMatch = contact.match(/\[([^\]]+)\]\(([^)]+)\)/);
-                  if (markdownLinkMatch) {
-                    const [fullMatch, linkText, url] = markdownLinkMatch;
-                    const beforeLink = contact.substring(0, contact.indexOf(fullMatch));
-                    const afterLink = contact.substring(
-                      contact.indexOf(fullMatch) + fullMatch.length
-                    );
-                    return (
-                      <Text key={idx} style={styles.contact}>
-                        {beforeLink}
-                        <Link src={url} style={styles.link}>
-                          {linkText}
-                        </Link>
-                        {afterLink}
-                        {idx < header.contact.length - 1 && ' | '}
-                      </Text>
-                    );
-                  }
-                  // Check if contact contains plain URL
-                  const urlMatch = contact.match(/(https?:\/\/[^\s]+)/);
-                  if (urlMatch) {
-                    const parts = contact.split(urlMatch[1]);
-                    return (
-                      <Text key={idx} style={styles.contact}>
-                        {parts[0]}
-                        <Link src={urlMatch[1]} style={styles.link}>
-                          {urlMatch[1].replace(/https?:\/\//, '')}
-                        </Link>
-                        {parts[1]}
-                        {idx < header.contact.length - 1 && ' | '}
-                      </Text>
-                    );
-                  }
-                  return (
-                    <Text key={idx} style={styles.contact}>
-                      {contact}
-                      {idx < header.contact.length - 1 && ' | '}
-                    </Text>
-                  );
-                })}
+                {header.contact.map((contact, idx) =>
+                  renderContactLine(contact, idx, header.contact.length, styles, true, (url) =>
+                    url.replace(/https?:\/\//, '')
+                  )
+                )}
               </View>
             )}
           </View>

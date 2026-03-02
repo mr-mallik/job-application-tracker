@@ -38,7 +38,7 @@ export function ProjectEntry({ project, index, onChange, onRemove }) {
                 placeholder="e.g., E-commerce Platform"
                 className="pl-10"
                 value={project.title || ''}
-                onChange={(e) => onChange({ ...project, title: e.target.value })}
+                onChange={(e) => onChange('title', e.target.value)}
               />
             </div>
           </div>
@@ -51,7 +51,7 @@ export function ProjectEntry({ project, index, onChange, onRemove }) {
                 placeholder="https://github.com/user/repo"
                 className="pl-10"
                 value={project.url || ''}
-                onChange={(e) => onChange({ ...project, url: e.target.value })}
+                onChange={(e) => onChange('url', e.target.value)}
               />
             </div>
           </div>
@@ -63,7 +63,7 @@ export function ProjectEntry({ project, index, onChange, onRemove }) {
             placeholder="Describe the project, technologies used, your role, and measurable impact...&#10;&#10;Example: Built a full-stack application using React and Node.js that increased user engagement by 40%"
             className="min-h-[100px] resize-y"
             value={project.description || ''}
-            onChange={(e) => onChange({ ...project, description: e.target.value })}
+            onChange={(e) => onChange('description', e.target.value)}
           />
           <p className="text-xs text-muted-foreground">
             Include tech stack, your contributions, and quantifiable results

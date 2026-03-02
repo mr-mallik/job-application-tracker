@@ -2,7 +2,6 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { useState } from 'react';
 import { User, LogOut, ChevronDown, Home, Files, MessagesSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
@@ -18,8 +17,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: Home },
-  { name: 'Documents', href: '#', icon: Files },
-  { name: 'Interview', href: '#', icon: MessagesSquare },
+  { name: 'Templates', href: '/templates', icon: Files },
 ];
 
 export function Header({ user, onLogout, currentPath = '/' }) {

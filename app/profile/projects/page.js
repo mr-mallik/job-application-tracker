@@ -138,6 +138,7 @@ export default function ProjectsPage() {
           {projects.map((project, index) => (
             <ProjectEntry
               key={index}
+              index={index}
               project={project}
               onChange={(field, value) => updateProject(index, field, value)}
               onRemove={() => removeProject(index)}

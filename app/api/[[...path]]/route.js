@@ -41,6 +41,75 @@ function parseDate(dateString) {
   return new Date(0) // Default to epoch if invalid
 }
 
+// Helper function to transform flat user data to nested profile structure
+function transformUserData(user) {
+  if (!user) return null
+  
+  // If profile data is already nested, return as-is
+  if (user.profile && typeof user.profile === 'object') {
+    return user
+  }
+  
+  // Helper: Convert education from single object to array if needed
+  let educationArray = user.education || []
+  if (user.education && !Array.isArray(user.education)) {
+    educationArray = [user.education]
+  }
+  
+  // Helper: Convert string-based skills to structured format if needed
+  let skillsObject = user.skills || { technical: [], soft: [], languages: [], other: [] }
+  if (user.skills && typeof user.skills === 'object') {
+    // If skills are stored as strings (legacy format), convert to arrays
+    if (typeof user.skills.relevant === 'string' || typeof user.skills.other === 'string') {
+      const technical = user.skills.relevant 
+        ? user.skills.relevant.split(',').map(s => ({ name: s.trim(), proficiency: 'Intermediate' }))
+        : []
+      const soft = user.skills.other
+        ? user.skills.other.split(',').map(s => ({ name: s.trim(), proficiency: 'Intermediate' }))
+        : []
+      skillsObject = { technical, soft, languages: [], other: [] }
+    }
+  }
+  
+  // Transform flat structure to nested profile structure
+  const transformed = {
+    ...user,
+    profile: {
+      headline: user.designation || user.headline || '',
+      phone: user.phone || '',
+      location: user.location || '',
+      linkedin: user.linkedin || '',
+      portfolio: user.portfolio || '',
+      summary: user.summary || '',
+      experiences: user.experiences || [],
+      education: educationArray,
+      skills: skillsObject,
+      projects: user.projects || [],
+      interests: user.interests || [],
+      achievements: user.achievements || '',
+      certifications: user.certifications || []
+    }
+  }
+  
+  // Clean up duplicate fields at root level (optional)
+  delete transformed.designation
+  delete transformed.headline
+  delete transformed.phone
+  delete transformed.location
+  delete transformed.linkedin
+  delete transformed.portfolio
+  delete transformed.summary
+  delete transformed.experiences
+  delete transformed.education
+  delete transformed.skills
+  delete transformed.projects
+  delete transformed.interests
+  delete transformed.achievements
+  delete transformed.certifications
+  
+  return transformed
+}
+
 async function getAuthUser(request) {
   const authHeader = request.headers.get('Authorization')
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null
@@ -104,7 +173,9 @@ async function handleRoute(request, { params }) {
       
       try {
         const result = await loginUser(email, password)
-        return handleCORS(NextResponse.json(result))
+        // Transform user data to nested profile structure
+        const transformedUser = transformUserData(result.user)
+        return handleCORS(NextResponse.json({ user: transformedUser, token: result.token }))
       } catch (error) {
         return handleCORS(NextResponse.json({ error: error.message }, { status: 401 }))
       }
@@ -116,7 +187,8 @@ async function handleRoute(request, { params }) {
       if (!user) {
         return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
       }
-      return handleCORS(NextResponse.json({ user }))
+      const transformedUser = transformUserData(user)
+      return handleCORS(NextResponse.json({ user: transformedUser }))
     }
     
     // Update profile
@@ -127,8 +199,31 @@ async function handleRoute(request, { params }) {
       }
       
       const body = await request.json()
-      const updatedUser = await updateUserProfile(user.id, body)
-      return handleCORS(NextResponse.json({ user: updatedUser }))
+      
+      // Handle nested profile structure from frontend
+      const updates = {}
+      if (body.name) updates.name = body.name
+      
+      if (body.profile) {
+        // Map nested profile fields to flat database structure
+        if (body.profile.headline !== undefined) updates.designation = body.profile.headline
+        if (body.profile.phone !== undefined) updates.phone = body.profile.phone
+        if (body.profile.location !== undefined) updates.location = body.profile.location
+        if (body.profile.linkedin !== undefined) updates.linkedin = body.profile.linkedin
+        if (body.profile.portfolio !== undefined) updates.portfolio = body.profile.portfolio
+        if (body.profile.summary !== undefined) updates.summary = body.profile.summary
+        if (body.profile.experiences !== undefined) updates.experiences = body.profile.experiences
+        if (body.profile.education !== undefined) updates.education = body.profile.education
+        if (body.profile.skills !== undefined) updates.skills = body.profile.skills
+        if (body.profile.projects !== undefined) updates.projects = body.profile.projects
+        if (body.profile.interests !== undefined) updates.interests = body.profile.interests
+        if (body.profile.achievements !== undefined) updates.achievements = body.profile.achievements
+        if (body.profile.certifications !== undefined) updates.certifications = body.profile.certifications
+      }
+      
+      const updatedUser = await updateUserProfile(user.id, updates)
+      const transformedUser = transformUserData(updatedUser)
+      return handleCORS(NextResponse.json({ user: transformedUser }))
     }
     
     // Parse resume PDF

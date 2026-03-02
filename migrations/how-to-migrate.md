@@ -1,0 +1,1 @@
+node migrate-education-to-array.js

@@ -22,6 +22,14 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [showAddJob, setShowAddJob] = useState(false)
   const [filter, setFilter] = useState('all')
 
+  // Merge user root fields with profile for backward compatibility
+  const userProfile = user ? {
+    ...user.profile,
+    name: user.name,
+    email: user.email,
+    id: user.id
+  } : null
+
   useEffect(() => { loadJobs() }, [])
   
   const loadJobs = async () => {
@@ -204,7 +212,7 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
                   <JobDetailsPanel 
                     job={selectedJob} 
                     token={token} 
-                    userProfile={user} 
+                    userProfile={userProfile} 
                     onUpdate={(updatedJob) => { 
                       setJobs(jobs.map(j => j.id === updatedJob.id ? updatedJob : j))
                       setSelectedJob(updatedJob)
@@ -228,7 +236,7 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
           </DialogHeader>
           <JobForm 
             token={token} 
-            userProfile={user} 
+            userProfile={userProfile} 
             onSave={(newJob) => { 
               setJobs([newJob, ...jobs])
               setShowAddJob(false)

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import { Briefcase, User, LogOut, ChevronDown, Home } from 'lucide-react'
+import { Briefcase, User, LogOut, ChevronDown, Home, Files, MessagesSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
@@ -14,6 +14,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ThemeToggle } from '@/components/theme-toggle'
+
+const navigation = [
+  { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Documents', href: '#', icon: Files },
+  { name: 'Interview', href: '#', icon: MessagesSquare },
+]
 
 export function Header({ user, onLogout, currentPath = '/' }) {
   const userInitials = user?.name
@@ -36,28 +42,20 @@ export function Header({ user, onLogout, currentPath = '/' }) {
 
           {/* Navigation Links */}
           <nav className="hidden md:flex items-center gap-4">
-            <Link 
-              href="/" 
-              className={`text-sm font-medium transition-colors hover:text-primary ${
-                currentPath === '/' ? 'text-primary' : 'text-muted-foreground'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <Home className="w-4 h-4" />
-                Dashboard
-              </div>
-            </Link>
-            <Link 
-              href="/profile" 
-              className={`text-sm font-medium transition-colors hover:text-primary ${
-                currentPath.startsWith('/profile') ? 'text-primary' : 'text-muted-foreground'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <User className="w-4 h-4" />
-                Profile
-              </div>
-            </Link>
+            {navigation.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
+                className={`text-sm font-medium transition-colors hover:text-primary ${
+                  currentPath === item.href ? 'text-primary' : 'text-muted-foreground'
+                }`}
+              >
+                <div className="flex items-center gap-1.5">
+                  <item.icon className="w-4 h-4" />
+                  {item.name}
+                </div>
+              </Link>
+            ))}
           </nav>
         </div>
 

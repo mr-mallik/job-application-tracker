@@ -1,10 +1,10 @@
-'use client'
+'use client';
 
-import { Button } from '@/components/ui/button'
-import { Separator } from '@/components/ui/separator'
-import { ArrowLeft, Briefcase, User } from 'lucide-react'
-import { ProfileEditor } from './ProfileEditor'
-import { ThemeToggle } from './theme-toggle'
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import { ArrowLeft, Briefcase, User } from 'lucide-react';
+import { ProfileEditor } from './ProfileEditor';
+import { ThemeToggle } from './theme-toggle';
 
 export function ProfilePage({ user, token, onBack, onUserUpdate }) {
   return (
@@ -14,12 +14,7 @@ export function ProfilePage({ user, token, onBack, onUserUpdate }) {
         <div className="container mx-auto px-4 lg:px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                onClick={onBack}
-                className="hover:bg-accent"
-              >
+              <Button variant="ghost" size="sm" onClick={onBack} className="hover:bg-accent">
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Back to Dashboard
               </Button>
@@ -30,7 +25,9 @@ export function ProfilePage({ user, token, onBack, onUserUpdate }) {
                 </div>
                 <div>
                   <h1 className="font-bold text-lg tracking-tight">Profile & Resume Data</h1>
-                  <p className="text-sm text-muted-foreground">Manage your professional information</p>
+                  <p className="text-sm text-muted-foreground">
+                    Manage your professional information
+                  </p>
                 </div>
               </div>
             </div>
@@ -40,22 +37,22 @@ export function ProfilePage({ user, token, onBack, onUserUpdate }) {
           </div>
         </div>
       </header>
-      
+
       {/* Main Content */}
       <div className="container mx-auto px-4 lg:px-6 py-6">
         <div className="bg-card border rounded-lg shadow-md p-6">
-          <ProfileEditor 
+          <ProfileEditor
             user={user}
             token={token}
             onSave={(updatedUser) => {
-              localStorage.setItem('user', JSON.stringify(updatedUser))
-              onUserUpdate(updatedUser)
-              onBack()
+              localStorage.setItem('user', JSON.stringify(updatedUser));
+              onUserUpdate(updatedUser);
+              onBack();
             }}
             onCancel={onBack}
           />
         </div>
       </div>
     </div>
-  )
+  );
 }

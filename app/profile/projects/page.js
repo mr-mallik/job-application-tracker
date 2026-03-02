@@ -1,69 +1,73 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { useToast } from '@/hooks/use-toast'
-import { FolderOpen, Plus, RefreshCw, Save } from 'lucide-react'
-import { ProjectEntry } from '@/components/ProjectEntry'
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { FolderOpen, Plus, RefreshCw, Save } from 'lucide-react';
+import { ProjectEntry } from '@/components/ProjectEntry';
 
 export default function ProjectsPage() {
-  const [projects, setProjects] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const { toast } = useToast()
+  const [projects, setProjects] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    loadProjects()
-  }, [])
+    loadProjects();
+  }, []);
 
   const loadProjects = async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (response.ok) {
-        const data = await response.json()
-        setProjects(data.user.profile?.projects || [])
+        const data = await response.json();
+        setProjects(data.user.profile?.projects || []);
       }
     } catch (error) {
-      console.error('Failed to load projects:', error)
-      toast({ title: 'Error', description: 'Failed to load projects', variant: 'destructive' })
+      console.error('Failed to load projects:', error);
+      toast({ title: 'Error', description: 'Failed to load projects', variant: 'destructive' });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSave = async () => {
-    setSaving(true)
+    setSaving(true);
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/auth/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          profile: { projects }
-        })
-      })
+          profile: { projects },
+        }),
+      });
 
       if (response.ok) {
-        toast({ title: 'Success', description: 'Projects saved successfully' })
+        toast({ title: 'Success', description: 'Projects saved successfully' });
       } else {
-        const data = await response.json()
-        toast({ title: 'Error', description: data.error || 'Failed to save', variant: 'destructive' })
+        const data = await response.json();
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to save',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
-      console.error('Save error:', error)
-      toast({ title: 'Error', description: 'Failed to save projects', variant: 'destructive' })
+      console.error('Save error:', error);
+      toast({ title: 'Error', description: 'Failed to save projects', variant: 'destructive' });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const addProject = () => {
     setProjects([
@@ -71,27 +75,27 @@ export default function ProjectsPage() {
       {
         title: '',
         description: '',
-        url: ''
-      }
-    ])
-  }
+        url: '',
+      },
+    ]);
+  };
 
   const updateProject = (index, field, value) => {
-    const updated = [...projects]
-    updated[index] = { ...updated[index], [field]: value }
-    setProjects(updated)
-  }
+    const updated = [...projects];
+    updated[index] = { ...updated[index], [field]: value };
+    setProjects(updated);
+  };
 
   const removeProject = (index) => {
-    setProjects(projects.filter((_, i) => i !== index))
-  }
+    setProjects(projects.filter((_, i) => i !== index));
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <RefreshCw className="w-8 h-8 animate-spin text-primary" />
       </div>
-    )
+    );
   }
 
   return (
@@ -100,7 +104,9 @@ export default function ProjectsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Projects</h1>
-          <p className="text-muted-foreground mt-1">Showcase your personal and professional projects</p>
+          <p className="text-muted-foreground mt-1">
+            Showcase your personal and professional projects
+          </p>
         </div>
         <Button onClick={addProject} size="sm">
           <Plus className="w-4 h-4 mr-2" />
@@ -144,12 +150,18 @@ export default function ProjectsPage() {
       <div className="flex justify-end gap-2 pb-6">
         <Button onClick={handleSave} disabled={saving} className="min-w-[140px]">
           {saving ? (
-            <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+            <>
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              Saving...
+            </>
           ) : (
-            <><Save className="w-4 h-4 mr-2" />Save Changes</>
+            <>
+              <Save className="w-4 h-4 mr-2" />
+              Save Changes
+            </>
           )}
         </Button>
       </div>
     </div>
-  )
+  );
 }

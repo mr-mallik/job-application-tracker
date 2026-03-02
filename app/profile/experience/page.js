@@ -1,69 +1,81 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { useToast } from '@/hooks/use-toast'
-import { Briefcase, Plus, RefreshCw, Save } from 'lucide-react'
-import { ExperienceEntry } from '@/components/ExperienceEntry'
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
+import { Briefcase, Plus, RefreshCw, Save } from 'lucide-react';
+import { ExperienceEntry } from '@/components/ExperienceEntry';
 
 export default function WorkExperiencePage() {
-  const [experiences, setExperiences] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const { toast } = useToast()
+  const [experiences, setExperiences] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    loadExperiences()
-  }, [])
+    loadExperiences();
+  }, []);
 
   const loadExperiences = async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (response.ok) {
-        const data = await response.json()
-        setExperiences(data.user.profile?.experiences || [])
+        const data = await response.json();
+        setExperiences(data.user.profile?.experiences || []);
       }
     } catch (error) {
-      console.error('Failed to load experiences:', error)
-      toast({ title: 'Error', description: 'Failed to load work experience', variant: 'destructive' })
+      console.error('Failed to load experiences:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load work experience',
+        variant: 'destructive',
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSave = async () => {
-    setSaving(true)
+    setSaving(true);
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/auth/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          profile: { experiences }
-        })
-      })
+          profile: { experiences },
+        }),
+      });
 
       if (response.ok) {
-        toast({ title: 'Success', description: 'Work experience saved successfully' })
+        toast({ title: 'Success', description: 'Work experience saved successfully' });
       } else {
-        const data = await response.json()
-        toast({ title: 'Error', description: data.error || 'Failed to save', variant: 'destructive' })
+        const data = await response.json();
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to save',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
-      console.error('Save error:', error)
-      toast({ title: 'Error', description: 'Failed to save work experience', variant: 'destructive' })
+      console.error('Save error:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save work experience',
+        variant: 'destructive',
+      });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   const addExperience = () => {
     setExperiences([
@@ -74,27 +86,27 @@ export default function WorkExperiencePage() {
         location: '',
         startDate: '',
         endDate: '',
-        description: ''
-      }
-    ])
-  }
+        description: '',
+      },
+    ]);
+  };
 
   const updateExperience = (index, field, value) => {
-    const updated = [...experiences]
-    updated[index] = { ...updated[index], [field]: value }
-    setExperiences(updated)
-  }
+    const updated = [...experiences];
+    updated[index] = { ...updated[index], [field]: value };
+    setExperiences(updated);
+  };
 
   const removeExperience = (index) => {
-    setExperiences(experiences.filter((_, i) => i !== index))
-  }
+    setExperiences(experiences.filter((_, i) => i !== index));
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <RefreshCw className="w-8 h-8 animate-spin text-primary" />
       </div>
-    )
+    );
   }
 
   return (
@@ -103,7 +115,9 @@ export default function WorkExperiencePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Work Experience</h1>
-          <p className="text-muted-foreground mt-1">Your professional work history and achievements</p>
+          <p className="text-muted-foreground mt-1">
+            Your professional work history and achievements
+          </p>
         </div>
         <Button onClick={addExperience} size="sm">
           <Plus className="w-4 h-4 mr-2" />
@@ -147,12 +161,18 @@ export default function WorkExperiencePage() {
       <div className="flex justify-end gap-2 pb-6">
         <Button onClick={handleSave} disabled={saving} className="min-w-[140px]">
           {saving ? (
-            <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+            <>
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              Saving...
+            </>
           ) : (
-            <><Save className="w-4 h-4 mr-2" />Save Changes</>
+            <>
+              <Save className="w-4 h-4 mr-2" />
+              Save Changes
+            </>
           )}
         </Button>
       </div>
     </div>
-  )
+  );
 }

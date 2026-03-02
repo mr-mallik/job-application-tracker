@@ -1,5 +1,5 @@
-import React from 'react'
-import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer'
+import React from 'react';
+import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
 
 // ATS-Friendly Resume Template - Clean, simple, machine-readable
 const styles = StyleSheet.create({
@@ -73,13 +73,10 @@ const styles = StyleSheet.create({
     marginRight: 8,
     marginBottom: 4,
   },
-})
+});
 
 export default function ATSResumeTemplate({ data }) {
-  )
-  const { header, sections } = data || {}
-  
-  
+  const { header, sections } = data || {};
 
   return (
     <Document>
@@ -89,60 +86,71 @@ export default function ATSResumeTemplate({ data }) {
           <View style={styles.header}>
             {header.name && <Text style={styles.name}>{header.name}</Text>}
             {header.designation && <Text style={styles.designation}>{header.designation}</Text>}
-            {header.contact && header.contact.map((contact, idx) => {
-              // Check if contact contains URL
-              const urlMatch = contact.match(/(https?:\/\/[^\s]+)/)
-              if (urlMatch) {
-                const parts = contact.split(urlMatch[1])
+            {header.contact &&
+              header.contact.map((contact, idx) => {
+                // Check if contact contains URL
+                const urlMatch = contact.match(/(https?:\/\/[^\s]+)/);
+                if (urlMatch) {
+                  const parts = contact.split(urlMatch[1]);
+                  return (
+                    <Text key={idx} style={styles.contact}>
+                      {parts[0]}
+                      <Link src={urlMatch[1]} style={styles.link}>
+                        {urlMatch[1]}
+                      </Link>
+                      {parts[1]}
+                    </Text>
+                  );
+                }
                 return (
                   <Text key={idx} style={styles.contact}>
-                    {parts[0]}
-                    <Link src={urlMatch[1]} style={styles.link}>
-                      {urlMatch[1]}
-                    </Link>
-                    {parts[1]}
+                    {contact}
                   </Text>
-                )
-              }
-              return <Text key={idx} style={styles.contact}>{contact}</Text>
-            })}
+                );
+              })}
           </View>
         )}
 
         {/* Content Sections */}
-        {sections && sections.map((section, sIdx) => (
-          <View key={sIdx} style={styles.section} wrap={false}>
-            <Text style={styles.sectionTitle}>{section.title || 'Section'}</Text>
-            
-            {section.items && section.items.map((item, iIdx) => {
-              if (!item || !item.content) return null
-              
-              if (item.type === 'subheading') {
-                return (
-                  <View key={iIdx} style={styles.itemContainer}>
-                    <Text style={styles.subheading}>{item.content}</Text>
-                  </View>
-                )
-              }
-              
-              if (item.type === 'bullet') {
-                return (
-                  <View key={iIdx} style={{ flexDirection: 'row', marginBottom: 3 }}>
-                    <Text style={styles.bullet}>•</Text>
-                    <Text style={[styles.bullet, styles.bulletText]}>{item.content}</Text>
-                  </View>
-                )
-              }
-              
-              if (item.type === 'text') {
-                return <Text key={iIdx} style={styles.text}>{item.content}</Text>
-              }
-              
-              return null
-            })}
-          </View>
-        ))}
+        {sections &&
+          sections.map((section, sIdx) => (
+            <View key={sIdx} style={styles.section} wrap={false}>
+              <Text style={styles.sectionTitle}>{section.title || 'Section'}</Text>
+
+              {section.items &&
+                section.items.map((item, iIdx) => {
+                  if (!item || !item.content) return null;
+
+                  if (item.type === 'subheading') {
+                    return (
+                      <View key={iIdx} style={styles.itemContainer}>
+                        <Text style={styles.subheading}>{item.content}</Text>
+                      </View>
+                    );
+                  }
+
+                  if (item.type === 'bullet') {
+                    return (
+                      <View key={iIdx} style={{ flexDirection: 'row', marginBottom: 3 }}>
+                        <Text style={styles.bullet}>•</Text>
+                        <Text style={[styles.bullet, styles.bulletText]}>{item.content}</Text>
+                      </View>
+                    );
+                  }
+
+                  if (item.type === 'text') {
+                    return (
+                      <Text key={iIdx} style={styles.text}>
+                        {item.content}
+                      </Text>
+                    );
+                  }
+
+                  return null;
+                })}
+            </View>
+          ))}
       </Page>
     </Document>
-  )
+  );
 }

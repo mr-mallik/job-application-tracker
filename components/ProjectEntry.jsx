@@ -1,11 +1,11 @@
-'use client'
+'use client';
 
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
-import { Trash2, FolderOpen, Link2 } from 'lucide-react'
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Trash2, FolderOpen, Link2 } from 'lucide-react';
 
 export function ProjectEntry({ project, index, onChange, onRemove }) {
   return (
@@ -18,9 +18,9 @@ export function ProjectEntry({ project, index, onChange, onRemove }) {
             </div>
             <span className="text-sm font-semibold">Project #{index + 1}</span>
           </div>
-          <Button 
-            variant="ghost" 
-            size="sm" 
+          <Button
+            variant="ghost"
+            size="sm"
             onClick={onRemove}
             className="hover:bg-destructive/10 hover:text-destructive transition-colors"
           >
@@ -34,40 +34,42 @@ export function ProjectEntry({ project, index, onChange, onRemove }) {
             <Label className="text-xs font-medium">Project Title</Label>
             <div className="relative">
               <FolderOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input 
-                placeholder="e.g., E-commerce Platform" 
-                className="pl-10" 
-                value={project.title || ''} 
-                onChange={(e) => onChange({ ...project, title: e.target.value })} 
+              <Input
+                placeholder="e.g., E-commerce Platform"
+                className="pl-10"
+                value={project.title || ''}
+                onChange={(e) => onChange({ ...project, title: e.target.value })}
               />
             </div>
           </div>
-          
+
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">Project URL (optional)</Label>
             <div className="relative">
               <Link2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input 
-                placeholder="https://github.com/user/repo" 
-                className="pl-10" 
-                value={project.url || ''} 
-                onChange={(e) => onChange({ ...project, url: e.target.value })} 
+              <Input
+                placeholder="https://github.com/user/repo"
+                className="pl-10"
+                value={project.url || ''}
+                onChange={(e) => onChange({ ...project, url: e.target.value })}
               />
             </div>
           </div>
         </div>
-        
+
         <div className="space-y-1.5">
           <Label className="text-xs font-medium">Description & Impact</Label>
-          <Textarea 
-            placeholder="Describe the project, technologies used, your role, and measurable impact...&#10;&#10;Example: Built a full-stack application using React and Node.js that increased user engagement by 40%" 
-            className="min-h-[100px] resize-y" 
-            value={project.description || ''} 
-            onChange={(e) => onChange({ ...project, description: e.target.value })} 
+          <Textarea
+            placeholder="Describe the project, technologies used, your role, and measurable impact...&#10;&#10;Example: Built a full-stack application using React and Node.js that increased user engagement by 40%"
+            className="min-h-[100px] resize-y"
+            value={project.description || ''}
+            onChange={(e) => onChange({ ...project, description: e.target.value })}
           />
-          <p className="text-xs text-muted-foreground">Include tech stack, your contributions, and quantifiable results</p>
+          <p className="text-xs text-muted-foreground">
+            Include tech stack, your contributions, and quantifiable results
+          </p>
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }

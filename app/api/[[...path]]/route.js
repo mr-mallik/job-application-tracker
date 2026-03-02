@@ -1,76 +1,88 @@
-import { MongoClient } from 'mongodb'
-import { v4 as uuidv4 } from 'uuid'
-import { NextResponse } from 'next/server'
-import { createUser, verifyUserEmail, loginUser, getUserFromToken, updateUserProfile, resetPasswordRequest, resetPassword, changePassword, deleteUserAccount, sendEmail } from '@/lib/auth'
-import { scrapeWithPlaywright, parseWithCheerio, detectJobBoard } from '@/lib/scraper'
-import { classifyJobData, refineDocument } from '@/lib/gemini'
-import { getCollection } from '@/lib/db'
+import { MongoClient } from 'mongodb';
+import { v4 as uuidv4 } from 'uuid';
+import { NextResponse } from 'next/server';
+import {
+  createUser,
+  verifyUserEmail,
+  loginUser,
+  getUserFromToken,
+  updateUserProfile,
+  resetPasswordRequest,
+  resetPassword,
+  changePassword,
+  deleteUserAccount,
+  sendEmail,
+} from '@/lib/auth';
+import { scrapeWithPlaywright, parseWithCheerio, detectJobBoard } from '@/lib/scraper';
+import { classifyJobData, refineDocument } from '@/lib/gemini';
 
 // MongoDB connection
-let client
-let db
+let client;
+let db;
 
 async function connectToMongo() {
   if (!client) {
-    client = new MongoClient(process.env.MONGO_URL)
-    await client.connect()
-    db = client.db(process.env.DB_NAME || 'job_tracker')
+    client = new MongoClient(process.env.MONGO_URL);
+    await client.connect();
+    db = client.db(process.env.DB_NAME || 'job_tracker');
   }
-  return db
+  return db;
 }
 
 function handleCORS(response) {
-  response.headers.set('Access-Control-Allow-Origin', process.env.CORS_ORIGINS || '*')
-  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
-  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization')
-  response.headers.set('Access-Control-Allow-Credentials', 'true')
-  return response
+  response.headers.set('Access-Control-Allow-Origin', process.env.CORS_ORIGINS || '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.headers.set('Access-Control-Allow-Credentials', 'true');
+  return response;
 }
 
 // Helper function to parse dates (mm/yyyy format)
 function parseDate(dateString) {
   if (!dateString || dateString.toLowerCase() === 'present') {
-    return new Date() // Current date for "Present"
+    return new Date(); // Current date for "Present"
   }
-  const parts = dateString.split('/')
+  const parts = dateString.split('/');
   if (parts.length === 2) {
-    const month = parseInt(parts[0]) - 1
-    const year = parseInt(parts[1])
-    return new Date(year, month)
+    const month = parseInt(parts[0]) - 1;
+    const year = parseInt(parts[1]);
+    return new Date(year, month);
   }
-  return new Date(0) // Default to epoch if invalid
+  return new Date(0); // Default to epoch if invalid
 }
 
 // Helper function to transform flat user data to nested profile structure
 function transformUserData(user) {
-  if (!user) return null
-  
+  if (!user) return null;
+
   // If profile data is already nested, return as-is
   if (user.profile && typeof user.profile === 'object') {
-    return user
+    return user;
   }
-  
+
   // Helper: Convert education from single object to array if needed
-  let educationArray = user.education || []
+  let educationArray = user.education || [];
   if (user.education && !Array.isArray(user.education)) {
-    educationArray = [user.education]
+    educationArray = [user.education];
   }
-  
+
   // Helper: Convert string-based skills to structured format if needed
-  let skillsObject = user.skills || { technical: [], soft: [], languages: [], other: [] }
+  let skillsObject = user.skills || { technical: [], soft: [], languages: [], other: [] };
   if (user.skills && typeof user.skills === 'object') {
     // If skills are stored as strings (legacy format), convert to arrays
     if (typeof user.skills.relevant === 'string' || typeof user.skills.other === 'string') {
-      const technical = user.skills.relevant 
-        ? user.skills.relevant.split(',').map(s => ({ name: s.trim(), proficiency: 'Intermediate' }))
-        : []
+      const technical = user.skills.relevant
+        ? user.skills.relevant
+            .split(',')
+            .map((s) => ({ name: s.trim(), proficiency: 'Intermediate' }))
+        : [];
       const soft = user.skills.other
-        ? user.skills.other.split(',').map(s => ({ name: s.trim(), proficiency: 'Intermediate' }))
-        : []
-      skillsObject = { technical, soft, languages: [], other: [] }
+        ? user.skills.other.split(',').map((s) => ({ name: s.trim(), proficiency: 'Intermediate' }))
+        : [];
+      skillsObject = { technical, soft, languages: [], other: [] };
     }
   }
-  
+
   // Transform flat structure to nested profile structure
   const transformed = {
     ...user,
@@ -87,386 +99,422 @@ function transformUserData(user) {
       projects: user.projects || [],
       interests: user.interests || [],
       achievements: user.achievements || '',
-      certifications: user.certifications || []
-    }
-  }
-  
+      certifications: user.certifications || [],
+    },
+  };
+
   // Clean up duplicate fields at root level (optional)
-  delete transformed.designation
-  delete transformed.headline
-  delete transformed.phone
-  delete transformed.location
-  delete transformed.linkedin
-  delete transformed.portfolio
-  delete transformed.summary
-  delete transformed.experiences
-  delete transformed.education
-  delete transformed.skills
-  delete transformed.projects
-  delete transformed.interests
-  delete transformed.achievements
-  delete transformed.certifications
-  
-  return transformed
+  delete transformed.designation;
+  delete transformed.headline;
+  delete transformed.phone;
+  delete transformed.location;
+  delete transformed.linkedin;
+  delete transformed.portfolio;
+  delete transformed.summary;
+  delete transformed.experiences;
+  delete transformed.education;
+  delete transformed.skills;
+  delete transformed.projects;
+  delete transformed.interests;
+  delete transformed.achievements;
+  delete transformed.certifications;
+
+  return transformed;
 }
 
 async function getAuthUser(request) {
-  const authHeader = request.headers.get('Authorization')
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null
-  const token = authHeader.substring(7)
-  return getUserFromToken(token)
+  const authHeader = request.headers.get('Authorization');
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
+  const token = authHeader.substring(7);
+  return getUserFromToken(token);
 }
 
 export async function OPTIONS() {
-  return handleCORS(new NextResponse(null, { status: 200 }))
+  return handleCORS(new NextResponse(null, { status: 200 }));
 }
 
 async function handleRoute(request, { params }) {
-  const { path = [] } = params
-  const route = `/${path.join('/')}`
-  const method = request.method
+  const { path = [] } = params;
+  const route = `/${path.join('/')}`;
+  const method = request.method;
 
   try {
-    const db = await connectToMongo()
+    const db = await connectToMongo();
 
     // Root endpoint
     if ((route === '/' || route === '/root') && method === 'GET') {
-      return handleCORS(NextResponse.json({ message: 'Job Tracker API v1.0' }))
+      return handleCORS(NextResponse.json({ message: 'Job Tracker API v1.0' }));
     }
 
     // ============ AUTH ROUTES ============
-    
+
     // Register
     if (route === '/auth/register' && method === 'POST') {
-      const body = await request.json()
-      const { email, password, name } = body
-      
+      const body = await request.json();
+      const { email, password, name } = body;
+
       if (!email || !password || !name) {
-        return handleCORS(NextResponse.json({ error: 'Email, password and name are required' }, { status: 400 }))
+        return handleCORS(
+          NextResponse.json({ error: 'Email, password and name are required' }, { status: 400 })
+        );
       }
-      
+
       try {
-        const user = await createUser(email, password, name)
-        return handleCORS(NextResponse.json({ message: 'Registration successful. Check console for verification code.', user }))
+        const user = await createUser(email, password, name);
+        return handleCORS(
+          NextResponse.json({
+            message: 'Registration successful. Check console for verification code.',
+            user,
+          })
+        );
       } catch (error) {
-        return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+        return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }));
       }
     }
-    
+
     // Verify email
     if (route === '/auth/verify' && method === 'POST') {
-      const body = await request.json()
-      const { email, code } = body
-      
+      const body = await request.json();
+      const { email, code } = body;
+
       try {
-        await verifyUserEmail(email, code)
-        return handleCORS(NextResponse.json({ message: 'Email verified successfully' }))
+        await verifyUserEmail(email, code);
+        return handleCORS(NextResponse.json({ message: 'Email verified successfully' }));
       } catch (error) {
-        return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+        return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }));
       }
     }
-    
+
     // Login
     if (route === '/auth/login' && method === 'POST') {
-      const body = await request.json()
-      const { email, password } = body
-      
+      const body = await request.json();
+      const { email, password } = body;
+
       try {
-        const result = await loginUser(email, password)
+        const result = await loginUser(email, password);
         // Transform user data to nested profile structure
-        const transformedUser = transformUserData(result.user)
-        return handleCORS(NextResponse.json({ user: transformedUser, token: result.token }))
+        const transformedUser = transformUserData(result.user);
+        return handleCORS(NextResponse.json({ user: transformedUser, token: result.token }));
       } catch (error) {
-        return handleCORS(NextResponse.json({ error: error.message }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: error.message }, { status: 401 }));
       }
     }
-    
+
     // Get current user
     if (route === '/auth/me' && method === 'GET') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      const transformedUser = transformUserData(user)
-      return handleCORS(NextResponse.json({ user: transformedUser }))
+      const transformedUser = transformUserData(user);
+      return handleCORS(NextResponse.json({ user: transformedUser }));
     }
-    
+
     // Update profile
     if (route === '/auth/profile' && method === 'PUT') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      
-      const body = await request.json()
-      
+
+      const body = await request.json();
+
       // Handle nested profile structure from frontend
-      const updates = {}
-      if (body.name) updates.name = body.name
-      
+      const updates = {};
+      if (body.name) updates.name = body.name;
+
       if (body.profile) {
         // Map nested profile fields to flat database structure
-        if (body.profile.headline !== undefined) updates.designation = body.profile.headline
-        if (body.profile.phone !== undefined) updates.phone = body.profile.phone
-        if (body.profile.location !== undefined) updates.location = body.profile.location
-        if (body.profile.linkedin !== undefined) updates.linkedin = body.profile.linkedin
-        if (body.profile.portfolio !== undefined) updates.portfolio = body.profile.portfolio
-        if (body.profile.summary !== undefined) updates.summary = body.profile.summary
-        if (body.profile.experiences !== undefined) updates.experiences = body.profile.experiences
-        if (body.profile.education !== undefined) updates.education = body.profile.education
-        if (body.profile.skills !== undefined) updates.skills = body.profile.skills
-        if (body.profile.projects !== undefined) updates.projects = body.profile.projects
-        if (body.profile.interests !== undefined) updates.interests = body.profile.interests
-        if (body.profile.achievements !== undefined) updates.achievements = body.profile.achievements
-        if (body.profile.certifications !== undefined) updates.certifications = body.profile.certifications
+        if (body.profile.headline !== undefined) updates.designation = body.profile.headline;
+        if (body.profile.phone !== undefined) updates.phone = body.profile.phone;
+        if (body.profile.location !== undefined) updates.location = body.profile.location;
+        if (body.profile.linkedin !== undefined) updates.linkedin = body.profile.linkedin;
+        if (body.profile.portfolio !== undefined) updates.portfolio = body.profile.portfolio;
+        if (body.profile.summary !== undefined) updates.summary = body.profile.summary;
+        if (body.profile.experiences !== undefined) updates.experiences = body.profile.experiences;
+        if (body.profile.education !== undefined) updates.education = body.profile.education;
+        if (body.profile.skills !== undefined) updates.skills = body.profile.skills;
+        if (body.profile.projects !== undefined) updates.projects = body.profile.projects;
+        if (body.profile.interests !== undefined) updates.interests = body.profile.interests;
+        if (body.profile.achievements !== undefined)
+          updates.achievements = body.profile.achievements;
+        if (body.profile.certifications !== undefined)
+          updates.certifications = body.profile.certifications;
       }
-      
-      const updatedUser = await updateUserProfile(user.id, updates)
-      const transformedUser = transformUserData(updatedUser)
-      return handleCORS(NextResponse.json({ user: transformedUser }))
+
+      const updatedUser = await updateUserProfile(user.id, updates);
+      const transformedUser = transformUserData(updatedUser);
+      return handleCORS(NextResponse.json({ user: transformedUser }));
     }
-    
+
     // Parse resume PDF
     if (route === '/auth/parse-resume' && method === 'POST') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      
-      const body = await request.json()
-      const { base64Content } = body
-      
+
+      const body = await request.json();
+      const { base64Content } = body;
+
       if (!base64Content) {
-        return handleCORS(NextResponse.json({ error: 'Resume content is required' }, { status: 400 }))
+        return handleCORS(
+          NextResponse.json({ error: 'Resume content is required' }, { status: 400 })
+        );
       }
-      
+
       try {
-        const { parseResumePDF } = await import('@/lib/gemini')
-        
-        const profileData = await parseResumePDF(base64Content)
-        
+        const { parseResumePDF } = await import('@/lib/gemini');
+
+        const profileData = await parseResumePDF(base64Content);
+
         // Sort experiences and education chronologically (most recent first)
         if (profileData.experiences && profileData.experiences.length > 0) {
           profileData.experiences.sort((a, b) => {
-            const dateA = parseDate(a.startDate)
-            const dateB = parseDate(b.startDate)
-            return dateB - dateA // Descending order (most recent first)
-          })
+            const dateA = parseDate(a.startDate);
+            const dateB = parseDate(b.startDate);
+            return dateB - dateA; // Descending order (most recent first)
+          });
         }
-        
-        
-        return handleCORS(NextResponse.json({ profileData }))
+
+        return handleCORS(NextResponse.json({ profileData }));
       } catch (error) {
-        console.error('[API] Resume parsing error:', error)
-        return handleCORS(NextResponse.json({ error: 'Failed to parse resume: ' + error.message }, { status: 500 }))
+        console.error('[API] Resume parsing error:', error);
+        return handleCORS(
+          NextResponse.json({ error: 'Failed to parse resume: ' + error.message }, { status: 500 })
+        );
       }
     }
-    
+
     // Request password reset
     if (route === '/auth/forgot-password' && method === 'POST') {
-      const body = await request.json()
-      const { email } = body
-      
-      await resetPasswordRequest(email)
-      return handleCORS(NextResponse.json({ message: 'If an account exists, reset code was sent. Check console.' }))
+      const body = await request.json();
+      const { email } = body;
+
+      await resetPasswordRequest(email);
+      return handleCORS(
+        NextResponse.json({ message: 'If an account exists, reset code was sent. Check console.' })
+      );
     }
-    
+
     // Reset password
     if (route === '/auth/reset-password' && method === 'POST') {
-      const body = await request.json()
-      const { email, code, newPassword } = body
-      
+      const body = await request.json();
+      const { email, code, newPassword } = body;
+
       try {
-        await resetPassword(email, code, newPassword)
-        return handleCORS(NextResponse.json({ message: 'Password reset successful' }))
+        await resetPassword(email, code, newPassword);
+        return handleCORS(NextResponse.json({ message: 'Password reset successful' }));
       } catch (error) {
-        return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+        return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }));
       }
     }
 
     // Change password (authenticated)
     if (route === '/auth/change-password' && method === 'POST') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      
-      const body = await request.json()
-      const { currentPassword, newPassword } = body
-      
+
+      const body = await request.json();
+      const { currentPassword, newPassword } = body;
+
       if (!currentPassword || !newPassword) {
-        return handleCORS(NextResponse.json({ error: 'Current password and new password are required' }, { status: 400 }))
+        return handleCORS(
+          NextResponse.json(
+            { error: 'Current password and new password are required' },
+            { status: 400 }
+          )
+        );
       }
-      
+
       try {
-        await changePassword(user.id, currentPassword, newPassword)
-        return handleCORS(NextResponse.json({ message: 'Password changed successfully' }))
+        await changePassword(user.id, currentPassword, newPassword);
+        return handleCORS(NextResponse.json({ message: 'Password changed successfully' }));
       } catch (error) {
-        return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }))
+        return handleCORS(NextResponse.json({ error: error.message }, { status: 400 }));
       }
     }
 
     // Delete account (authenticated)
     if (route === '/auth/delete-account' && method === 'DELETE') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      
+
       try {
-        await deleteUserAccount(user.id)
-        return handleCORS(NextResponse.json({ message: 'Account deleted successfully' }))
+        await deleteUserAccount(user.id);
+        return handleCORS(NextResponse.json({ message: 'Account deleted successfully' }));
       } catch (error) {
-        return handleCORS(NextResponse.json({ error: error.message }, { status: 500 }))
+        return handleCORS(NextResponse.json({ error: error.message }, { status: 500 }));
       }
     }
 
     // ============ JOB ROUTES ============
-    
+
     // Scrape job from URL using Playwright + Cheerio + Gemini AI
     if (route === '/jobs/scrape' && method === 'POST') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      
-      const body = await request.json()
-      const { url } = body
-      
+
+      const body = await request.json();
+      const { url } = body;
+
       if (!url) {
-        return handleCORS(NextResponse.json({ error: 'URL is required' }, { status: 400 }))
+        return handleCORS(NextResponse.json({ error: 'URL is required' }, { status: 400 }));
       }
-      
+
       try {
-        
-        const jobBoard = detectJobBoard(url)
-        
-        
+        const jobBoard = detectJobBoard(url);
+
         // Step 1: Use Browserless to fetch the page (handles JavaScript rendering)
-        
-        const scrapedResult = await scrapeWithPlaywright(url)
-        const { html, visibleText, method } = scrapedResult
-        
-        
-        
+
+        const scrapedResult = await scrapeWithPlaywright(url);
+        const { html, visibleText, method } = scrapedResult;
+
         // Validate we have sufficient content before proceeding
         if (!html || html.length < 1000 || !visibleText || visibleText.length < 500) {
-          console.error('[Scraper] Insufficient content. Likely an auth page or error.')
-          return handleCORS(NextResponse.json({ 
-            error: 'Unable to extract job details. The URL may require authentication (login), be a search results page instead of a specific job posting, or the page did not load properly. Please try: 1) A direct link to a single job posting, 2) Logging in first and copying the job description text to use "Paste Text" mode instead.'
-          }, { status: 400 }))
+          console.error('[Scraper] Insufficient content. Likely an auth page or error.');
+          return handleCORS(
+            NextResponse.json(
+              {
+                error:
+                  'Unable to extract job details. The URL may require authentication (login), be a search results page instead of a specific job posting, or the page did not load properly. Please try: 1) A direct link to a single job posting, 2) Logging in first and copying the job description text to use "Paste Text" mode instead.',
+              },
+              { status: 400 }
+            )
+          );
         }
-        
+
         // Step 2: Parse with Cheerio to extract structured data
-        
-        const scrapedData = parseWithCheerio(html, url)
-        scrapedData.visibleText = visibleText
-        
-        ))
-         || visibleText?.substring(0, 500))
-        
+
+        const scrapedData = parseWithCheerio(html, url);
+        scrapedData.visibleText = visibleText;
+
         // Validate we have meaningful data before calling Gemini
-        const hasValidData = (
-          (scrapedData.possibleTitles.length > 0 && scrapedData.possibleTitles[0] !== 'Sign in' && scrapedData.possibleTitles[0].length > 5) ||
-          (scrapedData.possibleDescriptions.length > 0 && scrapedData.possibleDescriptions[0].length > 200) ||
-          visibleText.length > 2000
-        )
-        
+        const hasValidData =
+          (scrapedData.possibleTitles.length > 0 &&
+            scrapedData.possibleTitles[0] !== 'Sign in' &&
+            scrapedData.possibleTitles[0].length > 5) ||
+          (scrapedData.possibleDescriptions.length > 0 &&
+            scrapedData.possibleDescriptions[0].length > 200) ||
+          visibleText.length > 2000;
+
         if (!hasValidData) {
-          console.error('[Scraper] No valid job data found. Skipping Gemini call.')
-          return handleCORS(NextResponse.json({ 
-            error: 'No job posting found at this URL. This might be a login page, search results page, or expired listing. Try using "Paste Text" mode instead.'
-          }, { status: 400 }))
+          console.error('[Scraper] No valid job data found. Skipping Gemini call.');
+          return handleCORS(
+            NextResponse.json(
+              {
+                error:
+                  'No job posting found at this URL. This might be a login page, search results page, or expired listing. Try using "Paste Text" mode instead.',
+              },
+              { status: 400 }
+            )
+          );
         }
-        
+
         // Step 3: Use Gemini AI to classify and structure the data
-        
-        const jobDetails = await classifyJobData(scrapedData, url)
-        
-        
-        return handleCORS(NextResponse.json({ 
-          jobDetails,
-          meta: {
-            jobBoard,
-            scrapedAt: new Date().toISOString(),
-            method: method || 'unknown'
-          }
-        }))
+
+        const jobDetails = await classifyJobData(scrapedData, url);
+
+        return handleCORS(
+          NextResponse.json({
+            jobDetails,
+            meta: {
+              jobBoard,
+              scrapedAt: new Date().toISOString(),
+              method: method || 'unknown',
+            },
+          })
+        );
       } catch (error) {
-        console.error('[Scraper] Error:', error)
-        
+        console.error('[Scraper] Error:', error);
+
         // Provide helpful error messages based on error type
-        let userMessage = error.message
+        let userMessage = error.message;
         if (error.message.includes('authentication') || error.message.includes('Login')) {
-          userMessage = 'This page requires login. Please log in to the job site first, then copy and paste the job description using "Paste Text" mode.'
+          userMessage =
+            'This page requires login. Please log in to the job site first, then copy and paste the job description using "Paste Text" mode.';
         } else if (error.message.includes('validation failed')) {
-          userMessage = 'Unable to extract job details from this page. Try using "Paste Text" mode instead.'
+          userMessage =
+            'Unable to extract job details from this page. Try using "Paste Text" mode instead.';
         }
-        
-        return handleCORS(NextResponse.json({ error: userMessage }, { status: 500 }))
+
+        return handleCORS(NextResponse.json({ error: userMessage }, { status: 500 }));
       }
     }
-    
+
     // Extract job details from pasted text using Gemini AI
     if (route === '/jobs/extract-text' && method === 'POST') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      
-      const body = await request.json()
-      const { text } = body
-      
+
+      const body = await request.json();
+      const { text } = body;
+
       if (!text) {
-        return handleCORS(NextResponse.json({ error: 'Job description text is required' }, { status: 400 }))
+        return handleCORS(
+          NextResponse.json({ error: 'Job description text is required' }, { status: 400 })
+        );
       }
-      
+
       try {
-        `)
-        
         // Use Gemini AI to extract structured data from text
-        
-        const { extractJobDetailsFromText } = await import('@/lib/gemini')
-        const jobDetails = await extractJobDetailsFromText(text)
-        
-        
-        return handleCORS(NextResponse.json({ 
-          jobDetails,
-          meta: {
-            extractedAt: new Date().toISOString(),
-            source: 'text'
-          }
-        }))
+
+        const { extractJobDetailsFromText } = await import('@/lib/gemini');
+        const jobDetails = await extractJobDetailsFromText(text);
+
+        return handleCORS(
+          NextResponse.json({
+            jobDetails,
+            meta: {
+              extractedAt: new Date().toISOString(),
+              source: 'text',
+            },
+          })
+        );
       } catch (error) {
-        console.error('[Text Extraction] Error:', error)
-        return handleCORS(NextResponse.json({ error: 'Failed to extract job details: ' + error.message }, { status: 500 }))
+        console.error('[Text Extraction] Error:', error);
+        return handleCORS(
+          NextResponse.json(
+            { error: 'Failed to extract job details: ' + error.message },
+            { status: 500 }
+          )
+        );
       }
     }
-    
+
     // Get all jobs for user
     if (route === '/jobs' && method === 'GET') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      
-      const jobs = await db.collection('jobs')
+
+      const jobs = await db
+        .collection('jobs')
         .find({ userId: user.id })
         .sort({ closingDate: -1 })
-        .toArray()
-      
-      const cleanJobs = jobs.map(({ _id, ...rest }) => rest)
-      return handleCORS(NextResponse.json({ jobs: cleanJobs }))
+        .toArray();
+
+      const cleanJobs = jobs.map(({ _id, ...rest }) => rest);
+      return handleCORS(NextResponse.json({ jobs: cleanJobs }));
     }
-    
+
     // Create job application
     if (route === '/jobs' && method === 'POST') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      
-      const body = await request.json()
+
+      const body = await request.json();
       const job = {
         id: uuidv4(),
         userId: user.id,
@@ -485,264 +533,320 @@ async function handleRoute(request, { params }) {
         rejectionFeedback: '',
         reminder: {
           enabled: body.reminder?.enabled || false,
-          daysBefore: body.reminder?.daysBefore || null // null means use system defaults (7 and 1 day)
+          daysBefore: body.reminder?.daysBefore || null, // null means use system defaults (7 and 1 day)
         },
         resume: { content: '', refinedContent: '' },
         coverLetter: { content: '', refinedContent: '' },
         supportingStatement: { content: '', refinedContent: '' },
         createdAt: new Date(),
-        updatedAt: new Date()
-      }
-      
-      await db.collection('jobs').insertOne(job)
-      const { _id, ...cleanJob } = job
-      return handleCORS(NextResponse.json({ job: cleanJob }, { status: 201 }))
+        updatedAt: new Date(),
+      };
+
+      await db.collection('jobs').insertOne(job);
+      const { _id, ...cleanJob } = job;
+      return handleCORS(NextResponse.json({ job: cleanJob }, { status: 201 }));
     }
-    
+
     // Get single job
     if (route.match(/^\/jobs\/[^/]+$/) && method === 'GET') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      
-      const jobId = path[1]
-      const job = await db.collection('jobs').findOne({ id: jobId, userId: user.id })
-      
+
+      const jobId = path[1];
+      const job = await db.collection('jobs').findOne({ id: jobId, userId: user.id });
+
       if (!job) {
-        return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }))
+        return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }));
       }
-      
-      const { _id, ...cleanJob } = job
-      return handleCORS(NextResponse.json({ job: cleanJob }))
+
+      const { _id, ...cleanJob } = job;
+      return handleCORS(NextResponse.json({ job: cleanJob }));
     }
-    
+
     // Update job
     if (route.match(/^\/jobs\/[^/]+$/) && method === 'PUT') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      
-      const jobId = path[1]
-      const body = await request.json()
-      
-      const updates = { updatedAt: new Date() }
-      const allowedFields = ['title', 'company', 'location', 'salary', 'closingDate', 'appliedDate', 'status', 'url', 'description', 'requirements', 'benefits', 'notes', 'rejectionFeedback', 'resume', 'coverLetter', 'supportingStatement', 'reminder']
-      
+
+      const jobId = path[1];
+      const body = await request.json();
+
+      const updates = { updatedAt: new Date() };
+      const allowedFields = [
+        'title',
+        'company',
+        'location',
+        'salary',
+        'closingDate',
+        'appliedDate',
+        'status',
+        'url',
+        'description',
+        'requirements',
+        'benefits',
+        'notes',
+        'rejectionFeedback',
+        'resume',
+        'coverLetter',
+        'supportingStatement',
+        'reminder',
+      ];
+
       for (const field of allowedFields) {
         if (body[field] !== undefined) {
-          updates[field] = body[field]
+          updates[field] = body[field];
         }
       }
-      
-      const result = await db.collection('jobs').updateOne(
-        { id: jobId, userId: user.id },
-        { $set: updates }
-      )
-      
+
+      const result = await db
+        .collection('jobs')
+        .updateOne({ id: jobId, userId: user.id }, { $set: updates });
+
       if (result.matchedCount === 0) {
-        return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }))
+        return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }));
       }
-      
-      const job = await db.collection('jobs').findOne({ id: jobId })
-      const { _id, ...cleanJob } = job
-      return handleCORS(NextResponse.json({ job: cleanJob }))
+
+      const job = await db.collection('jobs').findOne({ id: jobId });
+      const { _id, ...cleanJob } = job;
+      return handleCORS(NextResponse.json({ job: cleanJob }));
     }
-    
+
     // Delete job
     if (route.match(/^\/jobs\/[^/]+$/) && method === 'DELETE') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      
-      const jobId = path[1]
-      const result = await db.collection('jobs').deleteOne({ id: jobId, userId: user.id })
-      
+
+      const jobId = path[1];
+      const result = await db.collection('jobs').deleteOne({ id: jobId, userId: user.id });
+
       if (result.deletedCount === 0) {
-        return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }))
+        return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }));
       }
-      
-      return handleCORS(NextResponse.json({ message: 'Job deleted' }))
+
+      return handleCORS(NextResponse.json({ message: 'Job deleted' }));
     }
 
     // ============ REMINDER ROUTES ============
-    
+
     // Check and send reminders for upcoming deadlines
     if (route === '/reminders/check' && method === 'POST') {
       try {
-        const today = new Date()
-        today.setHours(0, 0, 0, 0)
-        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
         // Find all jobs with reminders enabled, status is "saved", and have a closing date
-        const jobs = await db.collection('jobs').find({
-          'reminder.enabled': true,
-          status: 'saved',
-          closingDate: { $ne: null, $exists: true }
-        }).toArray()
-        
-        
-        
-        const remindersSent = []
-        const errors = []
-        
+        const jobs = await db
+          .collection('jobs')
+          .find({
+            'reminder.enabled': true,
+            status: 'saved',
+            closingDate: { $ne: null, $exists: true },
+          })
+          .toArray();
+
+        const remindersSent = [];
+        const errors = [];
+
         for (const job of jobs) {
           try {
             // Skip if no closing date
-            if (!job.closingDate) continue
-            
+            if (!job.closingDate) continue;
+
             // Parse closing date
-            const closingDate = new Date(job.closingDate)
-            closingDate.setHours(0, 0, 0, 0)
-            
+            const closingDate = new Date(job.closingDate);
+            closingDate.setHours(0, 0, 0, 0);
+
             // Calculate days until deadline
-            const daysUntilDeadline = Math.ceil((closingDate - today) / (1000 * 60 * 60 * 24))
-            
+            const daysUntilDeadline = Math.ceil((closingDate - today) / (1000 * 60 * 60 * 24));
+
             // Skip if deadline has passed
             if (daysUntilDeadline < 0) {
-              
-              continue
+              continue;
             }
-            
+
             // Determine if reminder should be sent
-            let shouldSend = false
-            
+            let shouldSend = false;
+
             if (job.reminder.daysBefore !== null && job.reminder.daysBefore !== undefined) {
               // User has set custom reminder
-              shouldSend = daysUntilDeadline === job.reminder.daysBefore
+              shouldSend = daysUntilDeadline === job.reminder.daysBefore;
             } else {
               // Use system defaults: 7 days and 1 day before
-              shouldSend = daysUntilDeadline === 7 || daysUntilDeadline === 1
+              shouldSend = daysUntilDeadline === 7 || daysUntilDeadline === 1;
             }
-            
+
             if (shouldSend) {
               // Get user email
-              const user = await db.collection('users').findOne({ id: job.userId })
+              const user = await db.collection('users').findOne({ id: job.userId });
               if (!user || !user.email) {
-                
-                continue
+                continue;
               }
-              
+
               // Format deadline date
-              const deadlineFormatted = closingDate.toLocaleDateString('en-US', { 
-                weekday: 'long', 
-                year: 'numeric', 
-                month: 'long', 
-                day: 'numeric' 
-              })
-              
+              const deadlineFormatted = closingDate.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+              });
+
               // Compose email
-              const subject = `⏰ Reminder: ${job.title} application deadline approaching`
-              const text = `Hi ${user.name || 'there'},
+              const userName = user.name || 'there';
+              const subject = `Reminder: ${job.title} application deadline approaching`;
+              const dayText = daysUntilDeadline === 1 ? 'day' : 'days';
+              const textLines = [
+                'Hi ' + userName + ',',
+                '',
+                'This is a reminder that the application deadline for the following job is approaching:',
+                '',
+                'Job Title: ' + job.title,
+                'Company: ' + job.company,
+                'Deadline: ' +
+                  deadlineFormatted +
+                  ' (' +
+                  daysUntilDeadline +
+                  ' ' +
+                  dayText +
+                  ' remaining)',
+              ];
 
-This is a reminder that the application deadline for the following job is approaching:
+              if (job.url) {
+                textLines.push('\nJob URL: ' + job.url);
+              }
 
-Job Title: ${job.title}
-Company: ${job.company}
-Deadline: ${deadlineFormatted} (${daysUntilDeadline} day${daysUntilDeadline === 1 ? '' : 's'} remaining)
-${job.url ? `\nJob URL: ${job.url}` : ''}
+              textLines.push(
+                '',
+                "Don't forget to submit your application before the deadline!",
+                '',
+                '---',
+                'Job Application Tracker',
+                'Login to manage your applications: ' + appUrl
+              );
 
-Don't forget to submit your application before the deadline!
+              const text = textLines.join('\n');
 
----
-Job Application Tracker
-Login to manage your applications: ${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}`
+              const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+              const jobUrlLink = job.url
+                ? `<p style="margin: 8px 0;"><a href="${job.url}" style="color: #2563eb;">View Job Posting</a></p>`
+                : '';
 
               const html = `
                 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                  <h2 style="color: #2563eb;">⏰ Application Deadline Reminder</h2>
-                  <p>Hi ${user.name || 'there'},</p>
+                  <h2 style="color: #2563eb;">Application Deadline Reminder</h2>
+                  <p>Hi ${userName},</p>
                   <p>This is a reminder that the application deadline for the following job is approaching:</p>
                   <div style="background: #f3f4f6; padding: 20px; border-radius: 8px; margin: 20px 0;">
                     <p style="margin: 8px 0;"><strong>Job Title:</strong> ${job.title}</p>
                     <p style="margin: 8px 0;"><strong>Company:</strong> ${job.company}</p>
                     <p style="margin: 8px 0;"><strong>Deadline:</strong> ${deadlineFormatted}</p>
                     <p style="margin: 8px 0; color: #dc2626; font-weight: bold;">
-                      ${daysUntilDeadline} day${daysUntilDeadline === 1 ? '' : 's'} remaining
+                      ${daysUntilDeadline} ${dayText} remaining
                     </p>
-                    ${job.url ? `<p style="margin: 8px 0;"><a href="${job.url}" style="color: #2563eb;">View Job Posting</a></p>` : ''}
+                    ${jobUrlLink}
                   </div>
                   <p>Don't forget to submit your application before the deadline!</p>
                   <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;" />
                   <p style="font-size: 12px; color: #6b7280;">
                     Job Application Tracker<br />
-                    <a href="${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}" style="color: #2563eb;">Login to manage your applications</a>
+                    <a href="${appUrl}" style="color: #2563eb;">Login to manage your applications</a>
                   </p>
                 </div>
-              `
-              
+              `;
+
               // Send email
-              await sendEmail(user.email, subject, text, html)
-              
+              await sendEmail(user.email, subject, text, html);
+
               remindersSent.push({
                 jobId: job.id,
                 jobTitle: job.title,
                 company: job.company,
                 daysUntilDeadline,
-                userEmail: user.email
-              })
-              
-              
+                userEmail: user.email,
+              });
             }
           } catch (error) {
-            console.error(`[Reminders] Error processing job ${job.id}:`, error)
-            errors.push({ jobId: job.id, error: error.message })
+            console.error(`[Reminders] Error processing job ${job.id}:`, error);
+            errors.push({ jobId: job.id, error: error.message });
           }
         }
-        
-        return handleCORS(NextResponse.json({ 
-          success: true,
-          remindersSent: remindersSent.length,
-          reminders: remindersSent,
-          errors: errors.length > 0 ? errors : undefined
-        }))
+
+        return handleCORS(
+          NextResponse.json({
+            success: true,
+            remindersSent: remindersSent.length,
+            reminders: remindersSent,
+            errors: errors.length > 0 ? errors : undefined,
+          })
+        );
       } catch (error) {
-        console.error('[Reminders] Error:', error)
-        return handleCORS(NextResponse.json({ error: 'Failed to check reminders: ' + error.message }, { status: 500 }))
+        console.error('[Reminders] Error:', error);
+        return handleCORS(
+          NextResponse.json(
+            { error: 'Failed to check reminders: ' + error.message },
+            { status: 500 }
+          )
+        );
       }
     }
 
     // ============ DOCUMENT ROUTES ============
-    
+
     // Refine document
     if (route === '/documents/refine' && method === 'POST') {
-      const user = await getAuthUser(request)
+      const user = await getAuthUser(request);
       if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }))
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      
-      const body = await request.json()
-      const { documentType, content, jobDescription, userPreferences, userProfile } = body
-      
+
+      const body = await request.json();
+      const { documentType, content, jobDescription, userPreferences, userProfile } = body;
+
       if (!documentType || !jobDescription) {
-        return handleCORS(NextResponse.json({ error: 'documentType and jobDescription are required' }, { status: 400 }))
+        return handleCORS(
+          NextResponse.json(
+            { error: 'documentType and jobDescription are required' },
+            { status: 400 }
+          )
+        );
       }
-      
+
       if (!['resume', 'coverLetter', 'supportingStatement'].includes(documentType)) {
-        return handleCORS(NextResponse.json({ error: 'Invalid document type' }, { status: 400 }))
+        return handleCORS(NextResponse.json({ error: 'Invalid document type' }, { status: 400 }));
       }
-      
+
       try {
-        const refinedContent = await refineDocument(documentType, content, jobDescription, userPreferences, userProfile)
-        return handleCORS(NextResponse.json({ refinedContent }))
+        const refinedContent = await refineDocument(
+          documentType,
+          content,
+          jobDescription,
+          userPreferences,
+          userProfile
+        );
+        return handleCORS(NextResponse.json({ refinedContent }));
       } catch (error) {
-        console.error('Refine error:', error)
-        return handleCORS(NextResponse.json({ error: 'Failed to refine document' }, { status: 500 }))
+        console.error('Refine error:', error);
+        return handleCORS(
+          NextResponse.json({ error: 'Failed to refine document' }, { status: 500 })
+        );
       }
     }
 
     // Route not found
-    return handleCORS(NextResponse.json({ error: `Route ${route} not found` }, { status: 404 }))
-
+    return handleCORS(NextResponse.json({ error: `Route ${route} not found` }, { status: 404 }));
   } catch (error) {
-    console.error('API Error:', error)
-    return handleCORS(NextResponse.json({ error: 'Internal server error' }, { status: 500 }))
+    console.error('API Error:', error);
+    return handleCORS(NextResponse.json({ error: 'Internal server error' }, { status: 500 }));
   }
 }
 
-export const GET = handleRoute
-export const POST = handleRoute
-export const PUT = handleRoute
-export const DELETE = handleRoute
-export const PATCH = handleRoute
+export const GET = handleRoute;
+export const POST = handleRoute;
+export const PUT = handleRoute;
+export const DELETE = handleRoute;
+export const PATCH = handleRoute;

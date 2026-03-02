@@ -1,5 +1,5 @@
-import React from 'react'
-import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer'
+import React from 'react';
+import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
 
 // Modern Resume Template - Visual design with accent colors
 const styles = StyleSheet.create({
@@ -92,10 +92,10 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     borderRadius: 3,
   },
-})
+});
 
 export default function ModernResumeTemplate({ data }) {
-  const { header, sections } = data
+  const { header, sections } = data;
 
   return (
     <Document>
@@ -105,81 +105,95 @@ export default function ModernResumeTemplate({ data }) {
           <View style={styles.header}>
             {header.name && <Text style={styles.name}>{header.name}</Text>}
             {header.designation && <Text style={styles.designation}>{header.designation}</Text>}
-            {header.contact && header.contact.map((contact, idx) => {
-              const urlMatch = contact.match(/(https?:\/\/[^\s]+)/)
-              if (urlMatch) {
-                const parts = contact.split(urlMatch[1])
+            {header.contact &&
+              header.contact.map((contact, idx) => {
+                const urlMatch = contact.match(/(https?:\/\/[^\s]+)/);
+                if (urlMatch) {
+                  const parts = contact.split(urlMatch[1]);
+                  return (
+                    <Text key={idx} style={styles.contact}>
+                      {parts[0]}
+                      <Link src={urlMatch[1]} style={styles.link}>
+                        {urlMatch[1].replace(/https?:\/\//, '')}
+                      </Link>
+                      {parts[1]}
+                    </Text>
+                  );
+                }
                 return (
                   <Text key={idx} style={styles.contact}>
-                    {parts[0]}
-                    <Link src={urlMatch[1]} style={styles.link}>
-                      {urlMatch[1].replace(/https?:\/\//, '')}
-                    </Link>
-                    {parts[1]}
+                    {contact}
                   </Text>
-                )
-              }
-              return <Text key={idx} style={styles.contact}>{contact}</Text>
-            })}
+                );
+              })}
           </View>
         )}
 
         {/* Content Sections */}
-        {sections && sections.map((section, sIdx) => {
-          // Special handling for Skills section
-          const isSkillsSection = section.title.toLowerCase().includes('skill')
-          
-          return (
-            <View key={sIdx} style={styles.section} wrap={false}>
-              <Text style={styles.sectionTitle}>{section.title}</Text>
-              
-              {isSkillsSection && section.items ? (
-                <View style={styles.skillsRow}>
-                  {section.items
-                    .filter(item => item && (item.type === 'text' || item.type === 'skill'))
-                    .map((item, iIdx) => {
-                      // Split comma-separated skills
-                      if (!item.content) return null
-                      const skills = item.content.split(',').map(s => s.trim()).filter(Boolean)
-                      return skills.map((skill, sIdx) => (
-                        <Text key={`${iIdx}-${sIdx}`} style={styles.skillBadge}>
-                          {skill}
+        {sections &&
+          sections.map((section, sIdx) => {
+            // Special handling for Skills section
+            const isSkillsSection = section.title.toLowerCase().includes('skill');
+
+            return (
+              <View key={sIdx} style={styles.section} wrap={false}>
+                <Text style={styles.sectionTitle}>{section.title}</Text>
+
+                {isSkillsSection && section.items ? (
+                  <View style={styles.skillsRow}>
+                    {section.items
+                      .filter((item) => item && (item.type === 'text' || item.type === 'skill'))
+                      .map((item, iIdx) => {
+                        // Split comma-separated skills
+                        if (!item.content) return null;
+                        const skills = item.content
+                          .split(',')
+                          .map((s) => s.trim())
+                          .filter(Boolean);
+                        return skills.map((skill, sIdx) => (
+                          <Text key={`${iIdx}-${sIdx}`} style={styles.skillBadge}>
+                            {skill}
+                          </Text>
+                        ));
+                      })}
+                  </View>
+                ) : (
+                  section.items &&
+                  section.items.map((item, iIdx) => {
+                    if (!item || !item.content) return null;
+
+                    if (item.type === 'subheading') {
+                      return (
+                        <View key={iIdx} style={styles.itemContainer}>
+                          <Text style={styles.subheading}>{item.content}</Text>
+                        </View>
+                      );
+                    }
+
+                    if (item.type === 'bullet') {
+                      return (
+                        <View key={iIdx} style={styles.bulletContainer}>
+                          <Text style={styles.bulletPoint}>•</Text>
+                          <Text style={[styles.bullet, styles.bulletText]}>{item.content}</Text>
+                        </View>
+                      );
+                    }
+
+                    if (item.type === 'text') {
+                      return (
+                        <Text key={iIdx} style={styles.text}>
+                          {item.content}
                         </Text>
-                      ))
-                    })}
-                </View>
-              ) : (
-                section.items && section.items.map((item, iIdx) => {
-                  if (!item || !item.content) return null
-                  
-                  if (item.type === 'subheading') {
-                    return (
-                      <View key={iIdx} style={styles.itemContainer}>
-                        <Text style={styles.subheading}>{item.content}</Text>
-                      </View>
-                    )
-                  }
-                  
-                  if (item.type === 'bullet') {
-                    return (
-                      <View key={iIdx} style={styles.bulletContainer}>
-                        <Text style={styles.bulletPoint}>•</Text>
-                        <Text style={[styles.bullet, styles.bulletText]}>{item.content}</Text>
-                      </View>
-                    )
-                  }
-                  
-                  if (item.type === 'text') {
-                    return <Text key={iIdx} style={styles.text}>{item.content}</Text>
-                  }
-                  
-                  return null
-                })
-              )}
-            </View>
-          )
-        })}
+                      );
+                    }
+
+                    return null;
+                  })
+                )}
+              </View>
+            );
+          })}
       </Page>
     </Document>
-  )
+  );
 }

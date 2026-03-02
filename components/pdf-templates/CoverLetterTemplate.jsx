@@ -1,5 +1,5 @@
-import React from 'react'
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer'
+import React from 'react';
+import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
 
 // Cover Letter / Supporting Statement Template
 const styles = StyleSheet.create({
@@ -64,18 +64,10 @@ const styles = StyleSheet.create({
   signatureName: {
     fontFamily: 'Helvetica-Bold',
   },
-})
+});
 
 export default function CoverLetterTemplate({ data, userProfile }) {
-  
-  
-  
-   : 'null')
-  
-  
-  
-  
-  const { paragraphs } = data || {}
+  const { paragraphs } = data || {};
 
   return (
     <Document>
@@ -91,43 +83,46 @@ export default function CoverLetterTemplate({ data, userProfile }) {
         )}
 
         {/* Date */}
-        <Text style={styles.date}>{new Date().toLocaleDateString('en-US', { 
-          year: 'numeric', 
-          month: 'long', 
-          day: 'numeric' 
-        })}</Text>
+        <Text style={styles.date}>
+          {new Date().toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'long',
+            day: 'numeric',
+          })}
+        </Text>
 
         {/* Content */}
-        {paragraphs && paragraphs.map((para, idx) => {
-          if (!para || !para.content) return null
-          
-          if (para.type === 'heading') {
-            return (
-              <Text key={idx} style={styles.heading}>
-                {para.content}
-              </Text>
-            )
-          }
+        {paragraphs &&
+          paragraphs.map((para, idx) => {
+            if (!para || !para.content) return null;
 
-          if (para.type === 'bullet') {
-            return (
-              <View key={idx} style={styles.bulletContainer}>
-                <Text style={styles.bulletPoint}>•</Text>
-                <Text style={[styles.bullet, styles.bulletText]}>{para.content}</Text>
-              </View>
-            )
-          }
+            if (para.type === 'heading') {
+              return (
+                <Text key={idx} style={styles.heading}>
+                  {para.content}
+                </Text>
+              );
+            }
 
-          if (para.type === 'text') {
-            return (
-              <Text key={idx} style={styles.paragraph}>
-                {para.content}
-              </Text>
-            )
-          }
+            if (para.type === 'bullet') {
+              return (
+                <View key={idx} style={styles.bulletContainer}>
+                  <Text style={styles.bulletPoint}>•</Text>
+                  <Text style={[styles.bullet, styles.bulletText]}>{para.content}</Text>
+                </View>
+              );
+            }
 
-          return null
-        })}
+            if (para.type === 'text') {
+              return (
+                <Text key={idx} style={styles.paragraph}>
+                  {para.content}
+                </Text>
+              );
+            }
+
+            return null;
+          })}
 
         {/* Signature */}
         {userProfile && userProfile.name && (
@@ -138,5 +133,5 @@ export default function CoverLetterTemplate({ data, userProfile }) {
         )}
       </Page>
     </Document>
-  )
+  );
 }

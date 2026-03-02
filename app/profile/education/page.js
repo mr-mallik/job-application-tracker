@@ -1,73 +1,81 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { useToast } from '@/hooks/use-toast'
-import { GraduationCap, Award, Plus, RefreshCw, Save } from 'lucide-react'
-import { EducationEntry } from '@/components/EducationEntry'
-import { CertificationEntry } from '@/components/CertificationEntry'
+import { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useToast } from '@/hooks/use-toast';
+import { GraduationCap, Award, Plus, RefreshCw, Save } from 'lucide-react';
+import { EducationEntry } from '@/components/EducationEntry';
+import { CertificationEntry } from '@/components/CertificationEntry';
 
 export default function EducationPage() {
-  const [education, setEducation] = useState([])
-  const [certifications, setCertifications] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const { toast } = useToast()
+  const [education, setEducation] = useState([]);
+  const [certifications, setCertifications] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    loadData()
-  }, [])
+    loadData();
+  }, []);
 
   const loadData = async () => {
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/auth/me', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+        headers: { Authorization: `Bearer ${token}` },
+      });
 
       if (response.ok) {
-        const data = await response.json()
-        setEducation(data.user.profile?.education || [])
-        setCertifications(data.user.profile?.certifications || [])
+        const data = await response.json();
+        setEducation(data.user.profile?.education || []);
+        setCertifications(data.user.profile?.certifications || []);
       }
     } catch (error) {
-      console.error('Failed to load education:', error)
-      toast({ title: 'Error', description: 'Failed to load education data', variant: 'destructive' })
+      console.error('Failed to load education:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load education data',
+        variant: 'destructive',
+      });
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleSave = async () => {
-    setSaving(true)
+    setSaving(true);
     try {
-      const token = localStorage.getItem('token')
+      const token = localStorage.getItem('token');
       const response = await fetch('/api/auth/profile', {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          profile: { education, certifications }
-        })
-      })
+          profile: { education, certifications },
+        }),
+      });
 
       if (response.ok) {
-        toast({ title: 'Success', description: 'Education & certifications saved successfully' })
+        toast({ title: 'Success', description: 'Education & certifications saved successfully' });
       } else {
-        const data = await response.json()
-        toast({ title: 'Error', description: data.error || 'Failed to save', variant: 'destructive' })
+        const data = await response.json();
+        toast({
+          title: 'Error',
+          description: data.error || 'Failed to save',
+          variant: 'destructive',
+        });
       }
     } catch (error) {
-      console.error('Save error:', error)
-      toast({ title: 'Error', description: 'Failed to save data', variant: 'destructive' })
+      console.error('Save error:', error);
+      toast({ title: 'Error', description: 'Failed to save data', variant: 'destructive' });
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
-  }
+  };
 
   // Education functions
   const addEducation = () => {
@@ -79,20 +87,20 @@ export default function EducationPage() {
         institution: '',
         location: '',
         graduationDate: '',
-        gpa: ''
-      }
-    ])
-  }
+        gpa: '',
+      },
+    ]);
+  };
 
   const updateEducation = (index, field, value) => {
-    const updated = [...education]
-    updated[index] = { ...updated[index], [field]: value }
-    setEducation(updated)
-  }
+    const updated = [...education];
+    updated[index] = { ...updated[index], [field]: value };
+    setEducation(updated);
+  };
 
   const removeEducation = (index) => {
-    setEducation(education.filter((_, i) => i !== index))
-  }
+    setEducation(education.filter((_, i) => i !== index));
+  };
 
   // Certification functions
   const addCertification = () => {
@@ -104,27 +112,27 @@ export default function EducationPage() {
         issueDate: '',
         expiryDate: '',
         credentialId: '',
-        credentialUrl: ''
-      }
-    ])
-  }
+        credentialUrl: '',
+      },
+    ]);
+  };
 
   const updateCertification = (index, field, value) => {
-    const updated = [...certifications]
-    updated[index] = { ...updated[index], [field]: value }
-    setCertifications(updated)
-  }
+    const updated = [...certifications];
+    updated[index] = { ...updated[index], [field]: value };
+    setCertifications(updated);
+  };
 
   const removeCertification = (index) => {
-    setCertifications(certifications.filter((_, i) => i !== index))
-  }
+    setCertifications(certifications.filter((_, i) => i !== index));
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
         <RefreshCw className="w-8 h-8 animate-spin text-primary" />
       </div>
-    )
+    );
   }
 
   return (
@@ -132,7 +140,9 @@ export default function EducationPage() {
       {/* Page Header */}
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Education & Certifications</h1>
-        <p className="text-muted-foreground mt-1">Your academic background and professional certifications</p>
+        <p className="text-muted-foreground mt-1">
+          Your academic background and professional certifications
+        </p>
       </div>
 
       <Tabs defaultValue="education" className="space-y-4">
@@ -234,12 +244,18 @@ export default function EducationPage() {
       <div className="flex justify-end gap-2 pb-6">
         <Button onClick={handleSave} disabled={saving} className="min-w-[140px]">
           {saving ? (
-            <><RefreshCw className="w-4 h-4 mr-2 animate-spin" />Saving...</>
+            <>
+              <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              Saving...
+            </>
           ) : (
-            <><Save className="w-4 h-4 mr-2" />Save Changes</>
+            <>
+              <Save className="w-4 h-4 mr-2" />
+              Save Changes
+            </>
           )}
         </Button>
       </div>
     </div>
-  )
+  );
 }

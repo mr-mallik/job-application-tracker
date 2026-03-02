@@ -12,11 +12,13 @@ class PDFErrorBoundary extends React.Component {
   }
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error }
+    // Handle undefined errors thrown by react-pdf
+    const safeError = error || new Error('Unknown PDF rendering error')
+    return { hasError: true, error: safeError }
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('PDF Rendering Error:', error, errorInfo)
+    console.error('PDF Rendering Error:', error || 'undefined error', errorInfo)
   }
 
   render() {

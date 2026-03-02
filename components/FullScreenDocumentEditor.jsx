@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Separator } from '@/components/ui/separator'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { X, Sparkles, RefreshCw, Copy, Download, Check, FileEdit, Eye, ZoomIn, ZoomOut, Type, List, Heading, Bold, Italic, Link as LinkIcon, User, HelpCircle, FileText, History } from 'lucide-react'
+import { X, Sparkles, RefreshCw, Copy, Download, Check, FileEdit, Eye, ZoomIn, ZoomOut, Type, List, Heading, Bold, Italic, Link as LinkIcon, User, HelpCircle, FileText, History, AlertCircle } from 'lucide-react'
 import { parseResumeMarkdown, parseDocumentMarkdown } from '@/lib/pdfParser'
 import { RESUME_TEMPLATES, COVER_LETTER_TEMPLATES, generateResumeFromProfile, generateCoverLetterTemplate, generateSupportingStatementTemplate } from '@/lib/templates'
 import { handleEditorShortcut, EDITOR_SHORTCUTS, getDefaultTemplate } from '@/lib/editorHelpers'
@@ -71,17 +71,31 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
     }
   }, [previewContent])
 
-  // Parse content for PDF rendering
+  // Parse content for PDF rendering with validation
   const parsedData = useMemo(() => {
     try {
+      if (!previewContent || previewContent.trim().length === 0) {
+        return null
+      }
+      
       if (documentType === 'resume') {
-        return parseResumeMarkdown(previewContent)
+        const parsed = parseResumeMarkdown(previewContent)
+        // Validate structure
+        if (!parsed || !parsed.sections || !Array.isArray(parsed.sections)) {
+          return null
+        }
+        return parsed
       } else {
-        return parseDocumentMarkdown(previewContent)
+        const parsed = parseDocumentMarkdown(previewContent)
+        // Validate structure
+        if (!parsed || !parsed.paragraphs || !Array.isArray(parsed.paragraphs)) {
+          return null
+        }
+        return parsed
       }
     } catch (error) {
       console.error('PDF parsing error:', error)
-      return documentType === 'resume' ? { header: null, sections: [] } : { paragraphs: [] }
+      return null
     }
   }, [previewContent, documentType])
 
@@ -335,12 +349,12 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
           <Button variant="outline" size="sm" onClick={() => navigator.clipboard.writeText(previewContent).then(() => toast.success('Copied!'))}><Copy className="w-4 h-4" /></Button>
           
           {/* PDF Download Link using react-pdf */}
-          {typeof window !== 'undefined' && parsedData && (
+          {typeof window !== 'undefined' && parsedData && previewContent?.trim() && TemplateComponent && (
             <PDFDownloadLink
               document={
                 documentType === 'resume' 
                   ? <TemplateComponent data={parsedData} />
-                  : <TemplateComponent data={parsedData} userProfile={userProfile} />
+                  : <TemplateComponent data={parsedData} userProfile={userProfile || {}} />
               }
               fileName={`${job.company.replace(/[^a-z0-9]/gi, '-')}-${config.label.replace(/\s+/g, '-')}.pdf`}
             >
@@ -600,7 +614,28 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
           </div>
           <div className="flex-1 overflow-auto p-6 flex items-start justify-center">
             <PDFErrorBoundary>
-              {typeof window !== 'undefined' && parsedData && TemplateComponent && (
+              {!previewContent || !previewContent.trim() ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center text-muted-foreground max-w-md">
+                    <Eye className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p className="text-sm">Start typing or generate content to see the PDF preview</p>
+                  </div>
+                </div>
+              ) : !parsedData ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center text-muted-foreground max-w-md">
+                    <AlertCircle className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p className="text-sm">Unable to parse content. Check your markdown formatting.</p>
+                  </div>
+                </div>
+              ) : documentType !== 'resume' && !userProfile ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="text-center text-muted-foreground max-w-md">
+                    <User className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                    <p className="text-sm">User profile is required to preview this document</p>
+                  </div>
+                </div>
+              ) : typeof window !== 'undefined' && parsedData && TemplateComponent ? (
                 <div style={{ 
                   transform: `scale(${zoom / 100})`, 
                   transformOrigin: 'top center',
@@ -610,11 +645,11 @@ export function FullScreenDocumentEditor({ job, documentType, token, onUpdate, u
                     {documentType === 'resume' ? (
                       <TemplateComponent data={parsedData} />
                     ) : (
-                      <TemplateComponent data={parsedData} userProfile={userProfile} />
+                      <TemplateComponent data={parsedData} userProfile={userProfile || {}} />
                     )}
                   </PDFViewer>
                 </div>
-              )}
+              ) : null}
             </PDFErrorBoundary>
           </div>
         </div>

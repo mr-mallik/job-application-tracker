@@ -1,8 +1,9 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useState } from 'react';
-import { Briefcase, User, LogOut, ChevronDown, Home, Files, MessagesSquare } from 'lucide-react';
+import { User, LogOut, ChevronDown, Home, Files, MessagesSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -35,10 +36,22 @@ export function Header({ user, onLogout, currentPath = '/' }) {
         {/* Logo/Brand */}
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2 font-semibold">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center shadow-sm">
-              <Briefcase className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <span className="hidden sm:inline-block">Job Tracker</span>
+            <Image
+              src="/assets/logo/jobtracker-logo.png"
+              alt="Logo"
+              width={32}
+              height={32}
+              className="w-8 h-8"
+              priority
+            />
+            <Image
+              src="/assets/logo/jobtracker-text.png"
+              alt="Job Tracker"
+              width={120}
+              height={24}
+              className="hidden sm:inline-block"
+              priority
+            />
           </Link>
 
           {/* Navigation Links */}

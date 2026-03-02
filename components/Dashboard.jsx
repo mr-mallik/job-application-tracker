@@ -1,101 +1,326 @@
-'use client'
+'use client';
 
-import { useState, useEffect } from 'react'
-import { toast } from 'sonner'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Briefcase, Plus, LogOut, User, RefreshCw, X } from 'lucide-react'
-import { statusColors } from './constants'
-import { JobForm } from './JobForm'
-import { JobDetailsPanel } from './JobDetailsPanel'
-import { ProfileEditor } from './ProfileEditor'
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Briefcase,
+  Plus,
+  RefreshCw,
+  X,
+  TrendingUp,
+  UserCheck,
+  CalendarCheck,
+  PartyPopper,
+  AlertCircle,
+  Loader2,
+} from 'lucide-react';
+import { statusColors } from './constants';
+import { JobForm } from './JobForm';
+import { JobDetailsPanel } from './JobDetailsPanel';
+import { formatDateShort, isPastDate } from '@/lib/dateUtils';
 
 export function Dashboard({ user, token, onLogout, onUserUpdate }) {
-  const [jobs, setJobs] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [selectedJob, setSelectedJob] = useState(null)
-  const [showAddJob, setShowAddJob] = useState(false)
-  const [showProfile, setShowProfile] = useState(false)
-  const [filter, setFilter] = useState('all')
+  const [jobs, setJobs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedJob, setSelectedJob] = useState(null);
+  const [showAddJob, setShowAddJob] = useState(false);
+  const [filter, setFilter] = useState('all');
 
-  useEffect(() => { loadJobs() }, [])
+  // Merge user root fields with profile for backward compatibility
+  // Handle both flat structure (fields at root) and nested structure (user.profile.*)
+  const userProfile = user
+    ? {
+        // Prefer nested structure if it exists, otherwise use root-level fields
+        name: user.name,
+        email: user.email,
+        id: user.id,
+        headline: user.profile?.headline || user.designation,
+        phone: user.profile?.phone || user.phone,
+        location: user.profile?.location || user.location,
+        linkedin: user.profile?.linkedin || user.linkedin,
+        portfolio: user.profile?.portfolio || user.portfolio,
+        summary: user.profile?.summary || user.summary,
+        experiences: user.profile?.experiences || user.experiences || [],
+        education: user.profile?.education || user.education,
+        skills: user.profile?.skills || user.skills,
+        projects: user.profile?.projects || user.projects || [],
+        certifications: user.profile?.certifications || user.certifications || [],
+        achievements: user.profile?.achievements || user.achievements,
+      }
+    : null;
+
+  useEffect(() => {
+    loadJobs();
+  }, []);
+
   const loadJobs = async () => {
-    try { const res = await fetch('/api/jobs', { headers: { 'Authorization': `Bearer ${token}` } }); const data = await res.json(); if (res.ok) setJobs(data.jobs) }
-    catch { toast.error('Failed to load') } finally { setLoading(false) }
-  }
-  const handleDeleteJob = async (id) => {
-    if (!confirm('Delete?')) return
-    try { await fetch(`/api/jobs/${id}`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } }); setJobs(jobs.filter(j => j.id !== id)); if (selectedJob?.id === id) setSelectedJob(null); toast.success('Deleted') }
-    catch { toast.error('Failed') }
-  }
+    try {
+      const res = await fetch('/api/jobs', { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (res.ok) setJobs(data.jobs);
+    } catch {
+      toast.error('Failed to load jobs');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const filteredJobs = filter === 'all' ? jobs : jobs.filter(j => j.status === filter)
-  const stats = { total: jobs.length, applied: jobs.filter(j => j.status === 'applied').length, interview: jobs.filter(j => j.status === 'interview').length, offer: jobs.filter(j => j.status === 'offer').length, rejected: jobs.filter(j => j.status === 'rejected').length }
+  const handleDeleteJob = async (id) => {
+    if (!confirm('Are you sure you want to delete this job?')) return;
+    try {
+      await fetch(`/api/jobs/${id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setJobs(jobs.filter((j) => j.id !== id));
+      if (selectedJob?.id === id) setSelectedJob(null);
+      toast.success('Job deleted successfully');
+    } catch {
+      toast.error('Failed to delete job');
+    }
+  };
+
+  const filteredJobs = filter === 'all' ? jobs : jobs.filter((j) => j.status === filter);
+  const stats = {
+    total: jobs.length,
+    applied: jobs.filter((j) => j.status === 'applied').length,
+    interview: jobs.filter((j) => j.status === 'interview').length,
+    offer: jobs.filter((j) => j.status === 'offer').length,
+    rejected: jobs.filter((j) => j.status === 'rejected').length,
+  };
+
+  const statCards = [
+    // { label: 'Total', value: stats.total, filter: 'all', icon: TrendingUp, color: 'text-primary', bgColor: 'bg-primary/10' },
+    {
+      label: 'Applied',
+      value: stats.applied,
+      filter: 'applied',
+      icon: UserCheck,
+      color: 'text-blue-600 dark:text-blue-400',
+      bgColor: 'bg-blue-100 dark:bg-blue-950',
+    },
+    {
+      label: 'Interviews',
+      value: stats.interview,
+      filter: 'interview',
+      icon: CalendarCheck,
+      color: 'text-yellow-600 dark:text-yellow-400',
+      bgColor: 'bg-yellow-100 dark:bg-yellow-950',
+    },
+    {
+      label: 'Offers',
+      value: stats.offer,
+      filter: 'offer',
+      icon: PartyPopper,
+      color: 'text-green-600 dark:text-green-400',
+      bgColor: 'bg-green-100 dark:bg-green-950',
+    },
+    {
+      label: 'Rejected',
+      value: stats.rejected,
+      filter: 'rejected',
+      icon: AlertCircle,
+      color: 'text-red-600 dark:text-red-400',
+      bgColor: 'bg-red-100 dark:bg-red-950',
+    },
+  ];
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center"><Briefcase className="w-5 h-5 text-primary-foreground" /></div>
-            <div><h1 className="font-semibold text-sm">Job Tracker</h1><p className="text-xs text-muted-foreground">Welcome, {user.name}</p></div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowProfile(true)}><User className="w-4 h-4 mr-1" />Profile</Button>
-            <Button variant="outline" size="sm" onClick={onLogout}><LogOut className="w-4 h-4 mr-1" />Logout</Button>
-          </div>
-        </div>
-      </header>
-      
-      <div className="container mx-auto px-4 py-4">
-        <div className="grid grid-cols-5 gap-3 mb-4">
-          {[{ label: 'Total', value: stats.total, f: 'all' }, { label: 'Applied', value: stats.applied, f: 'applied', c: 'text-blue-600' }, { label: 'Interviews', value: stats.interview, f: 'interview', c: 'text-yellow-600' }, { label: 'Offers', value: stats.offer, f: 'offer', c: 'text-green-600' }, { label: 'Rejected', value: stats.rejected, f: 'rejected', c: 'text-red-600' }].map(s => (
-            <Card key={s.f} className="cursor-pointer hover:shadow-md" onClick={() => setFilter(s.f)}><CardContent className="py-3"><div className={`text-xl font-bold ${s.c || ''}`}>{s.value}</div><div className="text-xs text-muted-foreground">{s.label}</div></CardContent></Card>
-          ))}
-        </div>
-        
-        <div className="flex gap-4">
-          <div className={`${selectedJob ? 'w-1/3' : 'w-full'} transition-all`}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2"><h2 className="font-semibold">Applications</h2>{filter !== 'all' && <Badge variant="secondary" className="cursor-pointer" onClick={() => setFilter('all')}>{filter} <X className="w-3 h-3 ml-1" /></Badge>}</div>
-              <Button size="sm" onClick={() => setShowAddJob(true)}><Plus className="w-4 h-4 mr-1" />Add</Button>
-            </div>
-            {loading ? 
-                <div className="text-center py-8">
-                    <RefreshCw className="w-6 h-6 mx-auto animate-spin text-muted-foreground" />
+    <div className="min-h-[calc(100vh-3.5rem)] bg-background">
+      {/* Main Content */}
+      <div className="container mx-auto px-4 lg:px-6 py-6 space-y-6">
+        {/* Compact Stats Bar */}
+        <div className="flex flex-wrap gap-2 p-3 bg-card rounded-lg border shadow-sm">
+          {statCards.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <Button
+                key={stat.filter}
+                variant={filter === stat.filter ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setFilter(stat.filter)}
+                className={`h-9 px-3 transition-all duration-200 ${
+                  filter === stat.filter ? 'shadow-md' : 'hover:bg-accent'
+                }`}
+              >
+                <div className={`p-1 rounded ${stat.bgColor} mr-2`}>
+                  <Icon className={`h-3 w-3 ${stat.color}`} />
                 </div>
-            : filteredJobs.length === 0 ? 
-                <Card>
-                    <CardContent className="py-8 text-center">
-                        <Briefcase className="w-10 h-10 mx-auto text-muted-foreground mb-2" />
-                        <p className="text-sm">No jobs found</p>
-                    </CardContent>
-                </Card>
-            : <div className="space-y-2">{filteredJobs.map(job => (
-                <Card key={job.id} className={`cursor-pointer hover:shadow-md ${selectedJob?.id === job.id ? 'ring-2 ring-primary' : ''}`} onClick={() => setSelectedJob(job)}>
-                    <CardContent className="py-3">
-                        <div className="flex justify-between items-start">
-                            <div>
-                                <h3 className="font-medium text-sm">{job.title}</h3>
-                                <p className="text-xs text-muted-foreground">
-                                    {job.company} {job.location && `• ${job.location}`} 
-                                    <span className='text-red-500'>{job.closingDate && ` • Closing Date: ${job.closingDate}`}</span>
-                                </p>
+                <span className={`font-bold text-base mr-1 ${stat.color}`}>{stat.value}</span>
+                <span className="text-xs text-muted-foreground">{stat.label}</span>
+              </Button>
+            );
+          })}
+        </div>
+
+        {/* Jobs List */}
+        <div className="w-full">
+          <Card className="shadow-md">
+            <CardHeader className="pb-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <CardTitle className="text-xl">Applications</CardTitle>
+                  {filter !== 'all' && (
+                    <Badge
+                      variant="secondary"
+                      className="cursor-pointer hover:bg-destructive hover:text-destructive-foreground transition-colors"
+                      onClick={() => setFilter('all')}
+                    >
+                      {filter} <X className="w-3 h-3 ml-1" />
+                    </Badge>
+                  )}
+                </div>
+                <Button size="sm" onClick={() => setShowAddJob(true)} className="shadow-sm">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add Job
+                </Button>
+              </div>
+            </CardHeader>
+            <Separator />
+            <div className="overflow-y-auto">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                  <Loader2 className="w-8 h-8 animate-spin text-primary" />
+                  <p className="text-sm text-muted-foreground">Loading applications...</p>
+                </div>
+              ) : filteredJobs.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 space-y-3">
+                  <div className="p-4 rounded-full bg-muted">
+                    <Briefcase className="w-10 h-10 text-muted-foreground" />
+                  </div>
+                  <div className="text-center space-y-1">
+                    <p className="text-sm font-medium">No jobs found</p>
+                    <p className="text-xs text-muted-foreground">
+                      {filter === 'all'
+                        ? 'Add your first job application to get started'
+                        : `No ${filter} applications yet`}
+                    </p>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-4 space-y-3">
+                  {filteredJobs.map((job) => {
+                    const isClosingSoon = job.closingDate && !isPastDate(job.closingDate);
+                    const isClosed = job.closingDate && isPastDate(job.closingDate);
+
+                    return (
+                      <Card
+                        key={job.id}
+                        className={`cursor-pointer transition-all duration-200 hover:shadow-md hover:scale-[1.02] ${
+                          selectedJob?.id === job.id
+                            ? 'ring-2 ring-primary shadow-md bg-accent/50'
+                            : 'hover:bg-accent/50'
+                        }`}
+                        onClick={() => setSelectedJob(job)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex justify-between items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              <h3 className="font-semibold text-sm mb-1 truncate">{job.title}</h3>
+                              <p className="text-xs text-muted-foreground line-clamp-1">
+                                {job.company}
+                                {job.location && ` • ${job.location}`}
+                              </p>
+                              <div className="flex flex-wrap gap-2 mt-2 text-xs">
+                                {job.appliedDate && (
+                                  <span className="text-muted-foreground">
+                                    Applied: {formatDateShort(job.appliedDate)}
+                                  </span>
+                                )}
+                                {job.closingDate && (
+                                  <span
+                                    className={
+                                      isClosed
+                                        ? 'text-muted-foreground line-through'
+                                        : isClosingSoon
+                                          ? 'text-orange-600 dark:text-orange-400 font-medium'
+                                          : 'text-muted-foreground'
+                                    }
+                                  >
+                                    {isClosed ? 'Closed' : 'Closes'}:{' '}
+                                    {formatDateShort(job.closingDate)}
+                                  </span>
+                                )}
+                              </div>
                             </div>
-                            <Badge className={statusColors[job.status]}>{job.status}</Badge>
-                        </div>
-                    </CardContent>
-                </Card>
-              ))}</div>}
-          </div>
-          {selectedJob && <div className="w-2/3"><Card className="h-[calc(100vh-220px)] overflow-hidden"><JobDetailsPanel job={selectedJob} token={token} userProfile={user} onUpdate={(u) => { setJobs(jobs.map(j => j.id === u.id ? u : j)); setSelectedJob(u); }} onClose={() => setSelectedJob(null)} onDelete={() => handleDeleteJob(selectedJob.id)} /></Card></div>}
+                            <Badge className={`${statusColors[job.status]} shrink-0 shadow-sm`}>
+                              {job.status}
+                            </Badge>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </Card>
+
+          {/* Job Details Panel - Full Screen Overlay */}
+          {selectedJob && (
+            <>
+              {/* Backdrop */}
+              <div
+                className="fixed inset-0 bg-black/50 z-50 animate-in fade-in duration-200"
+                onClick={() => setSelectedJob(null)}
+              />
+
+              {/* Sliding Panel from Right */}
+              <div className="fixed inset-y-0 right-0 w-full sm:w-[90%] md:w-[80%] lg:w-[70%] xl:w-[60%] max-w-[1200px] z-50 animate-in slide-in-from-right duration-300">
+                <div className="h-full bg-background shadow-2xl border-r">
+                  <JobDetailsPanel
+                    job={selectedJob}
+                    token={token}
+                    userProfile={userProfile}
+                    onUpdate={(updatedJob) => {
+                      setJobs(jobs.map((j) => (j.id === updatedJob.id ? updatedJob : j)));
+                      setSelectedJob(updatedJob);
+                    }}
+                    onClose={() => setSelectedJob(null)}
+                    onDelete={() => handleDeleteJob(selectedJob.id)}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
-      
-      <Dialog open={showAddJob} onOpenChange={setShowAddJob}><DialogContent className="max-w-2xl"><DialogHeader><DialogTitle>Add New Job</DialogTitle></DialogHeader><JobForm token={token} userProfile={user} onSave={(nj) => { setJobs([nj, ...jobs]); setShowAddJob(false); setSelectedJob(nj); }} onCancel={() => setShowAddJob(false)} /></DialogContent></Dialog>
-      <Dialog open={showProfile} onOpenChange={setShowProfile}><DialogContent className="max-w-6xl max-h-[90vh]"><DialogHeader><DialogTitle>Profile & Resume Data</DialogTitle><DialogDescription>Your data is used as template for AI-generated resumes</DialogDescription></DialogHeader><ProfileEditor user={user} token={token} onSave={(u) => { localStorage.setItem('user', JSON.stringify(u)); onUserUpdate(u); setShowProfile(false); }} onCancel={() => setShowProfile(false)} /></DialogContent></Dialog>
+
+      {/* Dialogs */}
+      <Dialog open={showAddJob} onOpenChange={setShowAddJob}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Add New Job Application</DialogTitle>
+            <DialogDescription>
+              Fill in the details or paste a job URL to auto-fetch information
+            </DialogDescription>
+          </DialogHeader>
+          <JobForm
+            token={token}
+            userProfile={userProfile}
+            onSave={(newJob) => {
+              setJobs([newJob, ...jobs]);
+              setShowAddJob(false);
+              setSelectedJob(newJob);
+              toast.success('Job added successfully!');
+            }}
+            onCancel={() => setShowAddJob(false)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
-  )
+  );
 }

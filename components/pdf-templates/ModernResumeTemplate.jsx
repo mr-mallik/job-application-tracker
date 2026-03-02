@@ -14,23 +14,32 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     paddingBottom: 16,
     borderBottom: '2 solid #2563EB',
+    textAlign: 'center',
   },
   name: {
     fontSize: 26,
     fontFamily: 'Helvetica-Bold',
     color: '#1F2937',
     marginBottom: 4,
+    textAlign: 'center',
   },
   designation: {
     fontSize: 14,
     color: '#2563EB',
     fontFamily: 'Helvetica-Bold',
     marginBottom: 10,
+    textAlign: 'center',
+  },
+  contactRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    marginBottom: 2,
   },
   contact: {
     fontSize: 9,
     color: '#6B7280',
-    marginBottom: 2,
+    marginRight: 4,
   },
   link: {
     color: '#2563EB',
@@ -105,27 +114,52 @@ export default function ModernResumeTemplate({ data }) {
           <View style={styles.header}>
             {header.name && <Text style={styles.name}>{header.name}</Text>}
             {header.designation && <Text style={styles.designation}>{header.designation}</Text>}
-            {header.contact &&
-              header.contact.map((contact, idx) => {
-                const urlMatch = contact.match(/(https?:\/\/[^\s]+)/);
-                if (urlMatch) {
-                  const parts = contact.split(urlMatch[1]);
+            {header.contact && header.contact.length > 0 && (
+              <View style={styles.contactRow}>
+                {header.contact.map((contact, idx) => {
+                  // Parse markdown link syntax [text](url)
+                  const markdownLinkMatch = contact.match(/\[([^\]]+)\]\(([^)]+)\)/);
+                  if (markdownLinkMatch) {
+                    const [fullMatch, linkText, url] = markdownLinkMatch;
+                    const beforeLink = contact.substring(0, contact.indexOf(fullMatch));
+                    const afterLink = contact.substring(
+                      contact.indexOf(fullMatch) + fullMatch.length
+                    );
+                    return (
+                      <Text key={idx} style={styles.contact}>
+                        {beforeLink}
+                        <Link src={url} style={styles.link}>
+                          {linkText}
+                        </Link>
+                        {afterLink}
+                        {idx < header.contact.length - 1 && ' | '}
+                      </Text>
+                    );
+                  }
+                  // Check if contact contains plain URL
+                  const urlMatch = contact.match(/(https?:\/\/[^\s]+)/);
+                  if (urlMatch) {
+                    const parts = contact.split(urlMatch[1]);
+                    return (
+                      <Text key={idx} style={styles.contact}>
+                        {parts[0]}
+                        <Link src={urlMatch[1]} style={styles.link}>
+                          {urlMatch[1].replace(/https?:\/\//, '')}
+                        </Link>
+                        {parts[1]}
+                        {idx < header.contact.length - 1 && ' | '}
+                      </Text>
+                    );
+                  }
                   return (
                     <Text key={idx} style={styles.contact}>
-                      {parts[0]}
-                      <Link src={urlMatch[1]} style={styles.link}>
-                        {urlMatch[1].replace(/https?:\/\//, '')}
-                      </Link>
-                      {parts[1]}
+                      {contact}
+                      {idx < header.contact.length - 1 && ' | '}
                     </Text>
                   );
-                }
-                return (
-                  <Text key={idx} style={styles.contact}>
-                    {contact}
-                  </Text>
-                );
-              })}
+                })}
+              </View>
+            )}
           </View>
         )}
 
@@ -174,7 +208,7 @@ export default function ModernResumeTemplate({ data }) {
                       return (
                         <View key={iIdx} style={styles.bulletContainer}>
                           <Text style={styles.bulletPoint}>•</Text>
-                          <Text style={[styles.bullet, styles.bulletText]}>{item.content}</Text>
+                          <Text style={styles.bulletText}>{item.content}</Text>
                         </View>
                       );
                     }

@@ -112,8 +112,15 @@ export function FullScreenDocumentEditor({
   const [zoom, setZoom] = useState(100);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [versions, setVersions] = useState([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [pdfPreviewContent, setPdfPreviewContent] = useState(job[documentType]?.content || '');
 
   const previewContent = showRefined && refinedContent ? refinedContent : content;
+
+  // Initialize PDF preview content on mount
+  useEffect(() => {
+    setPdfPreviewContent(previewContent);
+  }, []);
 
   // Load version history on mount
   useEffect(() => {
@@ -130,15 +137,22 @@ export function FullScreenDocumentEditor({
     };
   }, [previewContent]);
 
+  // Refresh PDF preview manually
+  const handleRefreshPreview = useCallback(() => {
+    setPdfPreviewContent(previewContent);
+    setRefreshTrigger((prev) => prev + 1);
+    toast.success('Preview refreshed!');
+  }, [previewContent]);
+
   // Parse content for PDF rendering with validation
   const parsedData = useMemo(() => {
     try {
-      if (!previewContent || previewContent.trim().length === 0) {
+      if (!pdfPreviewContent || pdfPreviewContent.trim().length === 0) {
         return null;
       }
 
       if (documentType === 'resume') {
-        const parsed = parseResumeMarkdown(previewContent);
+        const parsed = parseResumeMarkdown(pdfPreviewContent);
 
         // Validate structure and content
         if (!parsed || !parsed.sections || !Array.isArray(parsed.sections)) {
@@ -167,7 +181,7 @@ export function FullScreenDocumentEditor({
 
         return result;
       } else {
-        const parsed = parseDocumentMarkdown(previewContent);
+        const parsed = parseDocumentMarkdown(pdfPreviewContent);
 
         // Validate structure and content
         if (!parsed || !parsed.paragraphs || !Array.isArray(parsed.paragraphs)) {
@@ -191,7 +205,7 @@ export function FullScreenDocumentEditor({
       console.error('❌ PDF parsing error:', error);
       return null;
     }
-  }, [previewContent, documentType]);
+  }, [pdfPreviewContent, documentType, refreshTrigger]);
 
   // Select appropriate template component
   const TemplateComponent = useMemo(() => {
@@ -237,6 +251,11 @@ export function FullScreenDocumentEditor({
       setRefinedContent(data.refinedContent);
       setShowRefined(true);
       toast.success('Refined!');
+      // Auto-refresh preview to show refined content
+      setTimeout(() => {
+        setPdfPreviewContent(data.refinedContent);
+        setRefreshTrigger((prev) => prev + 1);
+      }, 100);
     } catch (error) {
       toast.error(error.message);
     } finally {
@@ -279,6 +298,11 @@ export function FullScreenDocumentEditor({
     setRefinedContent('');
     setShowRefined(false);
     toast.success('Applied');
+    // Auto-refresh preview after applying refined content
+    setTimeout(() => {
+      setPdfPreviewContent(refinedContent);
+      setRefreshTrigger((prev) => prev + 1);
+    }, 100);
   };
 
   const generateFromProfile = useCallback(() => {
@@ -299,6 +323,11 @@ export function FullScreenDocumentEditor({
 
     setContent(generated);
     toast.success('Generated from profile!');
+    // Auto-refresh preview after generating
+    setTimeout(() => {
+      setPdfPreviewContent(generated);
+      setRefreshTrigger((prev) => prev + 1);
+    }, 100);
   }, [userProfile, documentType, selectedTemplate, job]);
 
   const loadTemplate = () => {
@@ -306,6 +335,11 @@ export function FullScreenDocumentEditor({
 
     setContent(template);
     toast.success('Template loaded!');
+    // Auto-refresh preview after loading template
+    setTimeout(() => {
+      setPdfPreviewContent(template);
+      setRefreshTrigger((prev) => prev + 1);
+    }, 100);
   };
 
   const handleRestoreVersion = (versionId) => {
@@ -313,6 +347,11 @@ export function FullScreenDocumentEditor({
     if (restoredContent) {
       setContent(restoredContent);
       toast.success('Version restored!');
+      // Auto-refresh preview after restoring
+      setTimeout(() => {
+        setPdfPreviewContent(restoredContent);
+        setRefreshTrigger((prev) => prev + 1);
+      }, 100);
     } else {
       toast.error('Failed to restore version');
     }
@@ -379,6 +418,14 @@ export function FullScreenDocumentEditor({
     return () => clearTimeout(timer);
   }, [hasUnsavedChanges, handleSave]);
 
+  // Auto-refresh preview when template changes
+  useEffect(() => {
+    if (documentType === 'resume') {
+      setPdfPreviewContent(previewContent);
+      setRefreshTrigger((prev) => prev + 1);
+    }
+  }, [selectedTemplate]);
+
   // Keyboard shortcuts handler
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -390,12 +437,13 @@ export function FullScreenDocumentEditor({
         bullet: () => insertMarkdown('bullet', 'List item'),
         save: () => handleSave(false),
         generate: generateFromProfile,
+        refresh: handleRefreshPreview,
       });
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [insertMarkdown, handleSave, generateFromProfile]);
+  }, [insertMarkdown, handleSave, generateFromProfile, handleRefreshPreview]);
 
   // Track changes
   useEffect(() => {
@@ -661,6 +709,18 @@ export function FullScreenDocumentEditor({
                 <LinkIcon className="w-4 h-4" />
               </Button>
             </div>
+
+            {/* Refresh Preview Button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2"
+              onClick={handleRefreshPreview}
+              title="Refresh Preview (Ctrl+R)"
+            >
+              <RefreshCw className="w-4 h-4 mr-1" />
+              <span className="text-xs">Refresh</span>
+            </Button>
 
             {/* Help Tooltip */}
             <TooltipProvider>

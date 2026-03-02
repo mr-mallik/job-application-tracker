@@ -227,7 +227,7 @@ export default function CreativeResumeTemplate({ data }) {
         {/* Right Column - Experience, Summary, Projects */}
         <View style={styles.rightColumn}>
           {rightSections.map((section, sIdx) => (
-            <View key={sIdx} style={styles.section} wrap={false}>
+            <View key={sIdx} style={styles.section}>
               <Text style={styles.sectionTitle}>{section.title || 'Section'}</Text>
 
               {section.items &&
@@ -236,7 +236,7 @@ export default function CreativeResumeTemplate({ data }) {
 
                   if (item.type === 'subheading') {
                     return (
-                      <View key={iIdx} style={styles.itemContainer}>
+                      <View key={iIdx} style={styles.itemContainer} wrap={false}>
                         <Text style={styles.subheading}>{item.content}</Text>
                       </View>
                     );

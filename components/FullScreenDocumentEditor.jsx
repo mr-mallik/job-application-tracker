@@ -818,7 +818,7 @@ export function FullScreenDocumentEditor({
               <Eye className="w-4 h-4" />
               PDF Preview
             </Label>
-            <div className="flex items-center gap-2">
+            {/* <div className="flex items-center gap-2">
               <Button
                 variant="ghost"
                 size="sm"
@@ -838,7 +838,7 @@ export function FullScreenDocumentEditor({
               >
                 <ZoomIn className="w-4 h-4" />
               </Button>
-            </div>
+            </div> */}
           </div>
           <div className="flex-1 overflow-auto p-6 flex items-start justify-center">
             <PDFErrorBoundary>
@@ -868,28 +868,21 @@ export function FullScreenDocumentEditor({
                   </div>
                 </div>
               ) : typeof window !== 'undefined' && parsedData && TemplateComponent ? (
-                <div
-                  style={{
-                    transform: `scale(${zoom / 100})`,
-                    transformOrigin: 'top center',
-                    width: `${100 / (zoom / 100)}%`,
-                  }}
-                >
-                  {(() => {
-                    return null;
-                  })()}
-                  <PDFViewer
-                    width="100%"
-                    height="800"
-                    showToolbar={false}
-                    className="border-0 rounded shadow-lg"
-                  >
-                    {documentType === 'resume' ? (
-                      <TemplateComponent data={parsedData} />
-                    ) : (
-                      <TemplateComponent data={parsedData} userProfile={userProfile || {}} />
-                    )}
-                  </PDFViewer>
+                <div className="w-full h-full overflow-auto flex justify-center">
+                  <div style={{ width: `${zoom}%`, minWidth: '595px' }}>
+                    <PDFViewer
+                      width="100%"
+                      height="842"
+                      showToolbar={false}
+                      className="border-0 rounded shadow-lg"
+                    >
+                      {documentType === 'resume' ? (
+                        <TemplateComponent data={parsedData} />
+                      ) : (
+                        <TemplateComponent data={parsedData} userProfile={userProfile || {}} />
+                      )}
+                    </PDFViewer>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center justify-center h-full">

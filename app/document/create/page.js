@@ -43,6 +43,8 @@ export default function CreateDocumentPage() {
   const [type, setType] = useState(searchParams.get('type') || 'resume');
   const [template, setTemplate] = useState('ats');
   const [jobId] = useState(searchParams.get('jobId') || null);
+  const [jobTitle, setJobTitle] = useState('');
+  const [job, setJob] = useState(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState('');
 
@@ -51,6 +53,19 @@ export default function CreateDocumentPage() {
     if (userData) setUser(JSON.parse(userData));
   }, []);
 
+  // Fetch job title when jobId is present
+  useEffect(() => {
+    if (!jobId) return;
+    const token = localStorage.getItem('token');
+    fetch(`/api/jobs/${jobId}`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.job?.title) setJobTitle(data.job.title);
+        if (data?.job) setJob(data.job);
+      })
+      .catch(() => {});
+  }, [jobId]);
+
   // Keep template in sync with type
   useEffect(() => {
     const templates = TEMPLATES_BY_TYPE[type] || [];
@@ -58,6 +73,13 @@ export default function CreateDocumentPage() {
       setTemplate(templates[0].value);
     }
   }, [type]);
+
+  // Auto-fill title whenever jobTitle or type changes
+  useEffect(() => {
+    if (!jobTitle) return;
+    const typeLabel = DOCUMENT_TYPES.find((t) => t.value === type)?.label || '';
+    setTitle(`${jobTitle} — ${typeLabel}`);
+  }, [jobTitle, type]);
 
   const handleCreate = async () => {
     if (!title.trim()) {
@@ -170,7 +192,14 @@ export default function CreateDocumentPage() {
 
             {jobId && (
               <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
-                This document will be linked to job <code className="font-mono">{jobId}</code>.
+                Linked to job{jobTitle ? `: ` : ''}
+                {jobTitle && <span className="font-medium text-foreground">{jobTitle}</span>}
+                {job?.company && (
+                  <>
+                    {' · '}
+                    <span className="font-medium text-foreground">{job.company}</span>
+                  </>
+                )}
               </p>
             )}
 

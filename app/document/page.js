@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -14,8 +13,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PlusCircle, FileText, FileEdit, Trash2, RefreshCw, ExternalLink } from 'lucide-react';
+import { PlusCircle, FileText, Trash2, RefreshCw, ExternalLink } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 
 const TYPE_LABELS = {
   resume: 'Resume',
@@ -151,73 +158,80 @@ export default function DocumentsPage() {
             </Button>
           </div>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filtered.map((doc) => (
-              <Link key={doc.id} href={`/document/${doc.id}`} className="group">
-                <Card className="h-full transition-shadow hover:shadow-md cursor-pointer">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <CardTitle className="text-base leading-tight line-clamp-2">
+          <div className="rounded-lg border overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Title</TableHead>
+                  <TableHead className="w-36">Type</TableHead>
+                  <TableHead className="w-24">Template</TableHead>
+                  <TableHead className="w-36">Last Updated</TableHead>
+                  <TableHead className="w-10" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filtered.map((doc) => {
+                  const linkedJob = doc.jobId ? jobsMap[doc.jobId] : null;
+                  return (
+                    <TableRow
+                      key={doc.id}
+                      className="cursor-pointer"
+                      onClick={() => router.push(`/document/${doc.id}`)}
+                    >
+                      <TableCell className="font-medium">
                         {doc.title}
-                      </CardTitle>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7"
-                        onClick={(e) => handleDelete(doc.id, e)}
-                        disabled={deletingId === doc.id}
-                      >
-                        {deletingId === doc.id ? (
-                          <RefreshCw className="w-3 h-3 animate-spin" />
+                        {linkedJob ? (
+                          <div className="flex items-start gap-1.5 text-xs mt-2 text-muted-foreground">
+                            <div>
+                              <span className="font-medium text-foreground">{linkedJob.title}</span>
+                              {linkedJob.company && (
+                                <span className="text-muted-foreground ml-1">
+                                  · {linkedJob.company}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        ) : doc.jobId ? (
+                          <span className="text-xs text-muted-foreground">Linked to job</span>
                         ) : (
-                          <Trash2 className="w-3 h-3 text-destructive" />
+                          <span className="text-xs text-muted-foreground"></span>
                         )}
-                      </Button>
-                    </div>
-                    <CardDescription>
-                      <Badge variant="outline" className="mt-1 text-xs">
-                        {TYPE_LABELS[doc.type] || doc.type}
-                      </Badge>
-                      {doc.template && (
-                        <Badge variant="secondary" className="ml-1 mt-1 text-xs">
-                          {TEMPLATE_LABELS[doc.template] || doc.template}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs">
+                          {TYPE_LABELS[doc.type] || doc.type}
                         </Badge>
-                      )}
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="pt-0">
-                    <p className="text-xs text-muted-foreground">
-                      {doc.blocks?.length || 0} block(s)
-                      {doc.updatedAt && (
-                        <>
-                          {' · '}
-                          {formatDistanceToNow(new Date(doc.updatedAt), { addSuffix: true })}
-                        </>
-                      )}
-                    </p>
-                    {doc.jobId && jobsMap[doc.jobId] && (
-                      <div className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground">
-                        <ExternalLink className="w-3 h-3 mt-0.5 shrink-0" />
-                        <div>
-                          <span className="font-medium text-foreground">
-                            {jobsMap[doc.jobId].title}
-                          </span>
-                          {jobsMap[doc.jobId].company && (
-                            <span className="ml-1">· {jobsMap[doc.jobId].company}</span>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="text-xs">
+                          {TEMPLATE_LABELS[doc.template] || doc.template || '—'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {doc.updatedAt
+                          ? formatDistanceToNow(new Date(doc.updatedAt), { addSuffix: true })
+                          : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 opacity-0 group-hover:opacity-100 hover:opacity-100 text-muted-foreground hover:text-destructive"
+                          onClick={(e) => handleDelete(doc.id, e)}
+                          disabled={deletingId === doc.id}
+                        >
+                          {deletingId === doc.id ? (
+                            <RefreshCw className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="w-3 h-3" />
                           )}
-                        </div>
-                      </div>
-                    )}
-                    {doc.jobId && !jobsMap[doc.jobId] && (
-                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                        <ExternalLink className="w-3 h-3" />
-                        Linked to job
-                      </p>
-                    )}
-                  </CardContent>
-                </Card>
-              </Link>
-            ))}
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
           </div>
         )}
       </main>

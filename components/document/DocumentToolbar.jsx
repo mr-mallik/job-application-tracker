@@ -15,24 +15,15 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Save, Download, RefreshCw, Circle } from 'lucide-react';
 
-// PDF download components (client-only)
+// Direct imports required — dynamic() wrappers break @react-pdf/renderer's renderer
+import ATSResumeTemplate from '@/components/pdf-templates/ATSResumeTemplate';
+import ModernResumeTemplate from '@/components/pdf-templates/ModernResumeTemplate';
+import CreativeResumeTemplate from '@/components/pdf-templates/CreativeResumeTemplate';
+import CoverLetterTemplate from '@/components/pdf-templates/CoverLetterTemplate';
+
+// PDF download link must be dynamic (uses browser-only Blob APIs)
 const PDFDownloadLink = dynamic(
-  () => import('@react-pdf/renderer').then((mod) => ({ default: mod.PDFDownloadLink })),
-  { ssr: false }
-);
-const ATSResumeTemplate = dynamic(() => import('@/components/pdf-templates/ATSResumeTemplate'), {
-  ssr: false,
-});
-const ModernResumeTemplate = dynamic(
-  () => import('@/components/pdf-templates/ModernResumeTemplate'),
-  { ssr: false }
-);
-const CreativeResumeTemplate = dynamic(
-  () => import('@/components/pdf-templates/CreativeResumeTemplate'),
-  { ssr: false }
-);
-const CoverLetterTemplate = dynamic(
-  () => import('@/components/pdf-templates/CoverLetterTemplate'),
+  () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
   { ssr: false }
 );
 

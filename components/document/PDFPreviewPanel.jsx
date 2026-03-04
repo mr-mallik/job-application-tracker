@@ -1,31 +1,19 @@
 'use client';
 
-import { useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import { RefreshCw } from 'lucide-react';
 
-// Load PDF components lazily — they can't run in SSR
-const PDFViewer = dynamic(
-  () => import('@react-pdf/renderer').then((mod) => ({ default: mod.PDFViewer })),
-  { ssr: false, loading: () => <PDFLoadingSpinner /> }
-);
+// Direct imports required — dynamic() wrappers break @react-pdf/renderer's internal renderer
+import ATSResumeTemplate from '@/components/pdf-templates/ATSResumeTemplate';
+import ModernResumeTemplate from '@/components/pdf-templates/ModernResumeTemplate';
+import CreativeResumeTemplate from '@/components/pdf-templates/CreativeResumeTemplate';
+import CoverLetterTemplate from '@/components/pdf-templates/CoverLetterTemplate';
 
-// Template components (also lazy to avoid SSR issues)
-const ATSResumeTemplate = dynamic(() => import('@/components/pdf-templates/ATSResumeTemplate'), {
+// PDFViewer itself must be dynamic (uses browser-only APIs)
+const PDFViewer = dynamic(() => import('@react-pdf/renderer').then((mod) => mod.PDFViewer), {
   ssr: false,
+  loading: () => <PDFLoadingSpinner />,
 });
-const ModernResumeTemplate = dynamic(
-  () => import('@/components/pdf-templates/ModernResumeTemplate'),
-  { ssr: false }
-);
-const CreativeResumeTemplate = dynamic(
-  () => import('@/components/pdf-templates/CreativeResumeTemplate'),
-  { ssr: false }
-);
-const CoverLetterTemplate = dynamic(
-  () => import('@/components/pdf-templates/CoverLetterTemplate'),
-  { ssr: false }
-);
 
 const TEMPLATE_MAP = {
   ats: ATSResumeTemplate,

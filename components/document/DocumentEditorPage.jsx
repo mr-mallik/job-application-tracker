@@ -2,15 +2,18 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { Header } from '@/components/Header';
-import DocumentToolbar from './DocumentToolbar';
-import BlockCanvas from './BlockCanvas';
-import PDFPreviewPanel from './PDFPreviewPanel';
-import AIRefineDialog from './AIRefineDialog';
+import dynamic from 'next/dynamic';
 import { RefreshCw, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { Header } from '@/components/Header';
+import DocumentToolbar from './DocumentToolbar';
+import BlockCanvas from './BlockCanvas';
+import AIRefineDialog from './AIRefineDialog';
+
+// PDFPreviewPanel directly imports @react-pdf/renderer templates — must be client-only
+const PDFPreviewPanel = dynamic(() => import('./PDFPreviewPanel'), { ssr: false });
 
 const AUTOSAVE_DELAY = 2000; // ms
 

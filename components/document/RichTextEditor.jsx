@@ -1,23 +1,14 @@
 'use client';
 
 import { useCallback, useMemo, useState, useRef, useEffect } from 'react';
-import { createEditor, Transforms, Text as SlateText } from 'slate';
+import { createEditor, Transforms, Range } from 'slate';
 import { Slate, Editable, withReact, ReactEditor } from 'slate-react';
 import { withHistory } from 'slate-history';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import {
-  Bold,
-  Italic,
-  Underline,
-  Link2,
-  Link2Off,
-  Sparkles,
-  RefreshCw,
-  Unlink,
-} from 'lucide-react';
+import { Bold, Italic, Underline, Link2, List, Sparkles, RefreshCw, Unlink } from 'lucide-react';
 import {
   SLATE_ELEM,
   ensureSlate,
@@ -25,8 +16,10 @@ import {
   toggleMark,
   isMarkActive,
   isLinkActive,
+  isListActive,
   wrapLink,
   unwrapLink,
+  toggleList,
 } from '@/lib/slateUtils';
 
 // ─── Plugin: make links inline ────────────────────────────────────────────
@@ -34,6 +27,65 @@ import {
 function withLinks(editor) {
   const { isInline } = editor;
   editor.isInline = (element) => (element.type === SLATE_ELEM.LINK ? true : isInline(element));
+  return editor;
+}
+
+// ─── Plugin: list keyboard behaviour ─────────────────────────────────────
+
+function withLists(editor) {
+  const { insertBreak, deleteBackward } = editor;
+
+  // Enter on an empty list-item → exit the list
+  editor.insertBreak = () => {
+    const { selection } = editor;
+    if (selection) {
+      const [listItemEntry] = Array.from(
+        editor.nodes({ match: (n) => n.type === SLATE_ELEM.LIST_ITEM })
+      );
+      if (listItemEntry) {
+        const [node] = listItemEntry;
+        const text = (node.children || []).map((c) => c.text || '').join('');
+        if (text === '') {
+          editor.setNodes(
+            { type: SLATE_ELEM.PARAGRAPH },
+            { match: (n) => n.type === SLATE_ELEM.LIST_ITEM }
+          );
+          editor.unwrapNodes({
+            match: (n) => n.type === SLATE_ELEM.BULLETED_LIST,
+            split: true,
+          });
+          return;
+        }
+      }
+    }
+    insertBreak();
+  };
+
+  // Backspace at the very start of the first list-item → exit the list
+  editor.deleteBackward = (unit) => {
+    const { selection } = editor;
+    if (selection && Range.isCollapsed(selection) && selection.anchor.offset === 0) {
+      const [listItemEntry] = Array.from(
+        editor.nodes({ match: (n) => n.type === SLATE_ELEM.LIST_ITEM })
+      );
+      if (listItemEntry) {
+        const [, itemPath] = listItemEntry;
+        if (selection.anchor.path[itemPath.length] === 0) {
+          editor.setNodes(
+            { type: SLATE_ELEM.PARAGRAPH },
+            { match: (n) => n.type === SLATE_ELEM.LIST_ITEM }
+          );
+          editor.unwrapNodes({
+            match: (n) => n.type === SLATE_ELEM.BULLETED_LIST,
+            split: true,
+          });
+          return;
+        }
+      }
+    }
+    deleteBackward(unit);
+  };
+
   return editor;
 }
 
@@ -64,6 +116,16 @@ function Element({ attributes, children, element }) {
       </a>
     );
   }
+  if (element.type === SLATE_ELEM.BULLETED_LIST) {
+    return (
+      <ul {...attributes} className="list-disc pl-5 my-0.5 space-y-0">
+        {children}
+      </ul>
+    );
+  }
+  if (element.type === SLATE_ELEM.LIST_ITEM) {
+    return <li {...attributes}>{children}</li>;
+  }
   return <span {...attributes}>{children}</span>;
 }
 
@@ -87,44 +149,6 @@ function ToolbarButton({ active, onMouseDown, title, children }) {
     >
       {children}
     </button>
-  );
-}
-
-// ─── Link popover ─────────────────────────────────────────────────────────
-
-function LinkPopover({ editor, onClose }) {
-  const [url, setUrl] = useState('');
-  const inputRef = useRef(null);
-
-  useEffect(() => {
-    setTimeout(() => inputRef.current?.focus(), 0);
-  }, []);
-
-  const handleApply = () => {
-    if (url.trim()) {
-      const href = url.startsWith('http') ? url : `https://${url}`;
-      wrapLink(editor, href);
-    }
-    onClose();
-  };
-
-  return (
-    <div className="flex items-center gap-1 p-1">
-      <Input
-        ref={inputRef}
-        value={url}
-        onChange={(e) => setUrl(e.target.value)}
-        placeholder="https://..."
-        className="h-7 text-xs w-44"
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') handleApply();
-          if (e.key === 'Escape') onClose();
-        }}
-      />
-      <Button size="sm" className="h-7 px-2 text-xs" onClick={handleApply}>
-        Apply
-      </Button>
-    </div>
   );
 }
 
@@ -246,14 +270,54 @@ export default function RichTextEditor({
   onBlur,
   style,
 }) {
-  const editor = useMemo(() => withLinks(withHistory(withReact(createEditor()))), []);
-  const [linkPopoverOpen, setLinkPopoverOpen] = useState(false);
+  const editor = useMemo(() => withLists(withLinks(withHistory(withReact(createEditor())))), []);
+
   const [focused, setFocused] = useState(false);
+  const [linkInputOpen, setLinkInputOpen] = useState(false);
+  const [linkUrl, setLinkUrl] = useState('');
+  // Refs — synchronous reads needed in event handlers
+  const savedSelectionRef = useRef(null);
+  const linkInputOpenRef = useRef(false);
+  const linkUrlInputRef = useRef(null);
 
   const renderLeaf = useCallback((props) => <Leaf {...props} />, []);
   const renderElement = useCallback((props) => <Element {...props} />, []);
 
   const safeValue = useMemo(() => ensureSlate(value), []);
+
+  // Keep ref in sync so onBlur can check synchronously
+  const openLinkInput = () => {
+    linkInputOpenRef.current = true;
+    setLinkInputOpen(true);
+  };
+  const closeLinkInput = () => {
+    linkInputOpenRef.current = false;
+    setLinkInputOpen(false);
+    setLinkUrl('');
+  };
+
+  // Focus the URL input whenever the link row becomes visible
+  useEffect(() => {
+    if (linkInputOpen) {
+      setTimeout(() => linkUrlInputRef.current?.focus(), 10);
+    }
+  }, [linkInputOpen]);
+
+  // Apply the link using the saved selection (editor may have lost focus)
+  const applyLink = useCallback(() => {
+    if (linkUrl.trim()) {
+      const href = linkUrl.startsWith('http') ? linkUrl : `https://${linkUrl}`;
+      try {
+        if (savedSelectionRef.current) {
+          Transforms.select(editor, savedSelectionRef.current);
+        }
+        wrapLink(editor, href);
+        ReactEditor.focus(editor);
+      } catch (_) {}
+    }
+    closeLinkInput();
+    savedSelectionRef.current = null;
+  }, [editor, linkUrl]);
 
   // Keyboard shortcuts
   const handleKeyDown = (event) => {
@@ -271,6 +335,15 @@ export default function RichTextEditor({
         event.preventDefault();
         toggleMark(editor, 'underline');
         break;
+      case 'k':
+        event.preventDefault();
+        savedSelectionRef.current = editor.selection;
+        if (linkInputOpenRef.current) {
+          closeLinkInput();
+        } else {
+          openLinkInput();
+        }
+        break;
     }
   };
 
@@ -278,6 +351,7 @@ export default function RichTextEditor({
   const isItalic = isMarkActive(editor, 'italic');
   const isUnderline = isMarkActive(editor, 'underline');
   const hasLink = isLinkActive(editor);
+  const isList = isListActive(editor);
 
   return (
     <div
@@ -288,59 +362,107 @@ export default function RichTextEditor({
       style={style}
     >
       <Slate editor={editor} initialValue={safeValue} onChange={onChange}>
-        {/* Floating toolbar, visible on focus */}
-        {focused && (
-          <div className="flex items-center gap-0.5 px-1 py-0.5 border-b bg-muted/60 rounded-t">
-            <ToolbarButton
-              active={isBold}
-              title="Bold (Ctrl+B)"
-              onMouseDown={() => toggleMark(editor, 'bold')}
-            >
-              <Bold className="w-3 h-3" />
-            </ToolbarButton>
-            <ToolbarButton
-              active={isItalic}
-              title="Italic (Ctrl+I)"
-              onMouseDown={() => toggleMark(editor, 'italic')}
-            >
-              <Italic className="w-3 h-3" />
-            </ToolbarButton>
-            <ToolbarButton
-              active={isUnderline}
-              title="Underline (Ctrl+U)"
-              onMouseDown={() => toggleMark(editor, 'underline')}
-            >
-              <Underline className="w-3 h-3" />
-            </ToolbarButton>
-
-            <div className="w-px h-4 bg-border mx-0.5" />
-
-            {/* Link */}
-            <Popover open={linkPopoverOpen} onOpenChange={setLinkPopoverOpen}>
-              <PopoverTrigger asChild>
-                <ToolbarButton active={hasLink} title="Add link" onMouseDown={() => {}}>
-                  <Link2 className="w-3 h-3" />
-                </ToolbarButton>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 doc-light" side="top">
-                <LinkPopover editor={editor} onClose={() => setLinkPopoverOpen(false)} />
-              </PopoverContent>
-            </Popover>
-
-            {hasLink && (
+        {/* Toolbar — shown while focused or while the link URL input is open */}
+        {(focused || linkInputOpen) && (
+          <div className="border-b bg-muted/60 rounded-t">
+            {/* Button row */}
+            <div className="flex items-center gap-0.5 px-1 py-0.5">
               <ToolbarButton
-                active={false}
-                title="Remove link"
-                onMouseDown={() => unwrapLink(editor)}
+                active={isBold}
+                title="Bold (Ctrl+B)"
+                onMouseDown={() => toggleMark(editor, 'bold')}
               >
-                <Unlink className="w-3 h-3" />
+                <Bold className="w-3 h-3" />
               </ToolbarButton>
+              <ToolbarButton
+                active={isItalic}
+                title="Italic (Ctrl+I)"
+                onMouseDown={() => toggleMark(editor, 'italic')}
+              >
+                <Italic className="w-3 h-3" />
+              </ToolbarButton>
+              <ToolbarButton
+                active={isUnderline}
+                title="Underline (Ctrl+U)"
+                onMouseDown={() => toggleMark(editor, 'underline')}
+              >
+                <Underline className="w-3 h-3" />
+              </ToolbarButton>
+
+              <div className="w-px h-4 bg-border mx-0.5" />
+
+              {/* Bulleted list */}
+              <ToolbarButton
+                active={isList}
+                title="Bulleted list"
+                onMouseDown={() => toggleList(editor)}
+              >
+                <List className="w-3 h-3" />
+              </ToolbarButton>
+
+              <div className="w-px h-4 bg-border mx-0.5" />
+
+              {/* Link — inline input, no Radix portal (avoids selection loss) */}
+              <ToolbarButton
+                active={hasLink || linkInputOpen}
+                title="Add / edit link (Ctrl+K)"
+                onMouseDown={() => {
+                  savedSelectionRef.current = editor.selection;
+                  if (linkInputOpenRef.current) {
+                    closeLinkInput();
+                  } else {
+                    openLinkInput();
+                  }
+                }}
+              >
+                <Link2 className="w-3 h-3" />
+              </ToolbarButton>
+
+              {hasLink && (
+                <ToolbarButton
+                  active={false}
+                  title="Remove link"
+                  onMouseDown={() => unwrapLink(editor)}
+                >
+                  <Unlink className="w-3 h-3" />
+                </ToolbarButton>
+              )}
+
+              <div className="flex-1" />
+
+              {/* Per-block AI refine */}
+              <AIRefineButton value={value} onChange={onChange} jobId={jobId} />
+            </div>
+
+            {/* Inline link URL input row — no portal, preserves editor selection */}
+            {linkInputOpen && (
+              <div className="flex items-center gap-1 px-1 py-0.5 border-t">
+                <Input
+                  ref={linkUrlInputRef}
+                  value={linkUrl}
+                  onChange={(e) => setLinkUrl(e.target.value)}
+                  placeholder="https://…"
+                  className="h-6 text-xs flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      applyLink();
+                    }
+                    if (e.key === 'Escape') closeLinkInput();
+                  }}
+                />
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    applyLink();
+                  }}
+                  className="h-6 px-2 text-xs bg-primary text-primary-foreground rounded hover:opacity-90 transition-opacity shrink-0"
+                >
+                  Apply
+                </button>
+              </div>
             )}
-
-            <div className="flex-1" />
-
-            {/* Per-block AI refine */}
-            <AIRefineButton value={value} onChange={onChange} jobId={jobId} />
           </div>
         )}
 
@@ -358,8 +480,11 @@ export default function RichTextEditor({
             onFocus?.();
           }}
           onBlur={() => {
-            setFocused(false);
-            onBlur?.();
+            // Don't collapse the toolbar if the link URL input is still open
+            if (!linkInputOpenRef.current) {
+              setFocused(false);
+              onBlur?.();
+            }
           }}
         />
       </Slate>

@@ -435,7 +435,7 @@ function InlineAddMenu({ onAdd, documentType }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full flex items-center justify-center gap-1 py-1 text-xs text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-all hover:bg-muted/40 rounded"
+        className="w-full flex items-center justify-center gap-1 py-1 text-xs text-muted-foreground hover:text-primary opacity-1 group-hover:opacity-100 transition-all hover:bg-muted/40 rounded"
       >
         <Plus className="w-3 h-3" />
         Add block

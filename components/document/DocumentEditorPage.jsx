@@ -179,6 +179,7 @@ export default function DocumentEditorPage({ documentId }) {
           <AIRefineDialog
             documentType={documentType}
             blocks={blocks}
+            jobId={doc?.jobId || null}
             onApply={(newBlocks) => {
               handleBlocksChange(newBlocks);
             }}

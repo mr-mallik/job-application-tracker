@@ -15,12 +15,37 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Sparkles, RefreshCw } from 'lucide-react';
 
-export default function AIRefineDialog({ documentType, blocks, onApply }) {
+export default function AIRefineDialog({ documentType, blocks, jobId, onApply }) {
   const [open, setOpen] = useState(false);
   const [jobDescription, setJobDescription] = useState('');
   const [preferences, setPreferences] = useState('');
   const [generating, setGenerating] = useState(false);
+  const [loadingJob, setLoadingJob] = useState(false);
   const [error, setError] = useState('');
+
+  // Pre-fill job description + requirements when opening, if linked to a job
+  const handleOpenChange = async (next) => {
+    setOpen(next);
+    if (next && jobId && !jobDescription.trim()) {
+      setLoadingJob(true);
+      try {
+        const token = localStorage.getItem('token');
+        const res = await fetch(`/api/jobs/${jobId}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          const job = data.job;
+          const parts = [job.description?.trim(), job.requirements?.trim()].filter(Boolean);
+          if (parts.length > 0) setJobDescription(parts.join('\n\n'));
+        }
+      } catch {
+        // silently ignore — user can paste manually
+      } finally {
+        setLoadingJob(false);
+      }
+    }
+  };
 
   const handleGenerate = async () => {
     if (!jobDescription.trim()) {
@@ -70,7 +95,7 @@ export default function AIRefineDialog({ documentType, blocks, onApply }) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger asChild>
         <Button size="sm" variant="outline" className="gap-1.5">
           <Sparkles className="w-3.5 h-3.5 text-violet-500" />
@@ -92,14 +117,23 @@ export default function AIRefineDialog({ documentType, blocks, onApply }) {
 
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label htmlFor="jd">Job Description *</Label>
+            <Label htmlFor="jd">
+              Job Description &amp; Requirements *
+              {loadingJob && (
+                <span className="ml-2 inline-flex items-center gap-1 text-xs font-normal text-muted-foreground">
+                  <RefreshCw className="w-3 h-3 animate-spin" />
+                  Loading from job…
+                </span>
+              )}
+            </Label>
             <Textarea
               id="jd"
-              placeholder="Paste the full job description here…"
+              placeholder="Paste the full job description and requirements here…"
               value={jobDescription}
               onChange={(e) => setJobDescription(e.target.value)}
               rows={8}
               className="resize-none text-sm"
+              disabled={loadingJob}
             />
           </div>
 
@@ -122,7 +156,7 @@ export default function AIRefineDialog({ documentType, blocks, onApply }) {
           <Button variant="outline" onClick={() => setOpen(false)} disabled={generating}>
             Cancel
           </Button>
-          <Button onClick={handleGenerate} disabled={generating} className="gap-2">
+          <Button onClick={handleGenerate} disabled={generating || loadingJob} className="gap-2">
             {generating ? (
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
             ) : (

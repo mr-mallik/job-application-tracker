@@ -34,6 +34,7 @@ export default function DocumentsPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
   const [documents, setDocuments] = useState([]);
+  const [jobsMap, setJobsMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('all');
   const [deletingId, setDeletingId] = useState(null);
@@ -48,12 +49,22 @@ export default function DocumentsPage() {
     try {
       setLoading(true);
       const token = localStorage.getItem('token');
-      const res = await fetch('/api/documents', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error('Failed to load documents');
-      const data = await res.json();
-      setDocuments(data.documents || []);
+      const [docsRes, jobsRes] = await Promise.all([
+        fetch('/api/documents', { headers: { Authorization: `Bearer ${token}` } }),
+        fetch('/api/jobs', { headers: { Authorization: `Bearer ${token}` } }),
+      ]);
+      if (!docsRes.ok) throw new Error('Failed to load documents');
+      const docsData = await docsRes.json();
+      setDocuments(docsData.documents || []);
+
+      if (jobsRes.ok) {
+        const jobsData = await jobsRes.json();
+        const map = {};
+        for (const job of jobsData.jobs || []) {
+          map[job.id] = { title: job.title, company: job.company };
+        }
+        setJobsMap(map);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -184,7 +195,20 @@ export default function DocumentsPage() {
                         </>
                       )}
                     </p>
-                    {doc.jobId && (
+                    {doc.jobId && jobsMap[doc.jobId] && (
+                      <div className="mt-2 flex items-start gap-1.5 text-xs text-muted-foreground">
+                        <ExternalLink className="w-3 h-3 mt-0.5 shrink-0" />
+                        <div>
+                          <span className="font-medium text-foreground">
+                            {jobsMap[doc.jobId].title}
+                          </span>
+                          {jobsMap[doc.jobId].company && (
+                            <span className="ml-1">· {jobsMap[doc.jobId].company}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {doc.jobId && !jobsMap[doc.jobId] && (
                       <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
                         <ExternalLink className="w-3 h-3" />
                         Linked to job

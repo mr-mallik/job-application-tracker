@@ -11,7 +11,7 @@ import { Header } from '@/components/Header';
 import DocumentToolbar from './DocumentToolbar';
 import DocumentCanvas from './DocumentCanvas';
 import AIRefineDialog from './AIRefineDialog';
-import { migrateBlocks } from '@/lib/blockSchema';
+import { migrateBlocks, getStarterBlocks } from '@/lib/blockSchema';
 
 // PDFPreviewPanel directly imports @react-pdf/renderer templates — must be client-only
 const PDFPreviewPanel = dynamic(() => import('./PDFPreviewPanel'), { ssr: false });
@@ -155,6 +155,17 @@ export default function DocumentEditorPage({ documentId }) {
     saveNow(blocks, title, template);
   };
 
+  const handleFetchFromProfile = () => {
+    const userData = localStorage.getItem('user');
+    const profile = userData ? JSON.parse(userData).profile : null;
+    const newBlocks = getStarterBlocks('resume', profile);
+    handleBlocksChange(newBlocks);
+    toast({
+      title: 'Profile data loaded',
+      description: 'Document has been populated from your profile.',
+    });
+  };
+
   const handleLogout = () => {
     localStorage.clear();
     router.push('/');
@@ -183,6 +194,7 @@ export default function DocumentEditorPage({ documentId }) {
         onTitleChange={handleTitleChange}
         onTemplateChange={handleTemplateChange}
         onSave={handleManualSave}
+        onFetchFromProfile={documentType === 'resume' ? handleFetchFromProfile : undefined}
         aiRefineSlot={
           <AIRefineDialog
             documentType={documentType}

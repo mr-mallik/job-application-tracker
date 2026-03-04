@@ -1,0 +1,237 @@
+// ============================================================
+// Job Application Tracker — MongoDB Schema
+// Represented in DBML for documentation purposes.
+// MongoDB does NOT enforce these constraints at the database
+// level; they are enforced by the application layer.
+//
+// Conventions:
+//   - All collections use a custom string `id` (UUIDv4) as
+//     the logical primary key alongside MongoDB's `_id` (ObjectId).
+//   - Dates are stored as ISO-8601 strings or BSON Date objects.
+//   - Nullable fields are noted with [note: 'nullable'].
+//   - Embedded sub-objects are described inline or as separate
+//     Tables with a [note: 'embedded'] marker.
+// ============================================================
+
+// ============================================================
+// COLLECTION: users
+// ============================================================
+Table users {
+  id              string      [pk, note: "UUIDv4 — application-level primary key"]
+  _id             ObjectId    [note: "MongoDB ObjectId — internal, not exposed via API"]
+  email           string      [unique, not null]
+  password        string      [not null, note: "bcrypt-hashed"]
+  name            string      [not null]
+  isVerified      boolean     [not null, default: false]
+  verificationCode  string    [note: "nullable — 6-digit email verification code"]
+  verificationExpiry  datetime [note: "nullable — expiry for verificationCode"]
+  resetCode       string      [note: "nullable — 6-digit password reset code"]
+  resetExpiry     datetime    [note: "nullable — 1-hour expiry for resetCode"]
+
+  // Nested profile object (embedded document)
+  // See Table user_profile below for field breakdown
+  profile         object      [note: "embedded — see user_profile table"]
+
+  createdAt       datetime    [not null]
+  updatedAt       datetime    [not null]
+}
+
+// Embedded sub-document: users.profile
+Table user_profile {
+  headline        string      [note: "Job title / professional headline"]
+  phone           string      [note: "nullable"]
+  location        string      [note: "nullable"]
+  linkedin        string      [note: "nullable — full URL"]
+  portfolio       string      [note: "nullable — full URL"]
+  summary         string      [note: "nullable — professional summary paragraph"]
+
+  // Arrays of embedded objects — see sub-tables below
+  experiences     array       [note: "embedded array — see user_experience"]
+  education       array       [note: "embedded array — see user_education"]
+  skills          object      [note: "embedded — see user_skills"]
+  projects        array       [note: "embedded array — see user_project"]
+  certifications  array       [note: "embedded array — see user_certification"]
+  interests       array       [note: "string[]"]
+  achievements    string      [note: "nullable — freeform text"]
+}
+
+Table user_experience {
+  id              string      [note: "UUIDv4"]
+  title           string      [note: "Job title / designation"]
+  company         string
+  location        string      [note: "nullable"]
+  startDate       string      [note: "mm/yyyy format"]
+  endDate         string      [note: "nullable — mm/yyyy or 'Present'"]
+  current         boolean     [default: false]
+  description     string      [note: "nullable — achievements / responsibilities"]
+}
+
+Table user_education {
+  id              string      [note: "UUIDv4"]
+  degree          string
+  institution     string
+  location        string      [note: "nullable"]
+  startDate       string      [note: "mm/yyyy or yyyy"]
+  endDate         string      [note: "nullable — mm/yyyy or yyyy"]
+  grade           string      [note: "nullable — e.g. '2:1', '3.8 GPA'"]
+  description     string      [note: "nullable"]
+}
+
+Table user_skills {
+  technical       array       [note: "skill_entry[] — see skill_entry"]
+  soft            array       [note: "skill_entry[]"]
+  languages       array       [note: "skill_entry[]"]
+  other           array       [note: "skill_entry[]"]
+}
+
+Table skill_entry {
+  name            string
+  proficiency     string      [note: "Beginner | Intermediate | Advanced | Expert"]
+}
+
+Table user_project {
+  id              string      [note: "UUIDv4"]
+  name            string
+  description     string      [note: "nullable"]
+  url             string      [note: "nullable"]
+  technologies    array       [note: "string[]"]
+  startDate       string      [note: "nullable — mm/yyyy"]
+  endDate         string      [note: "nullable — mm/yyyy or 'Present'"]
+}
+
+Table user_certification {
+  id              string      [note: "UUIDv4"]
+  name            string
+  issuer          string      [note: "nullable"]
+  date            string      [note: "nullable — mm/yyyy"]
+  url             string      [note: "nullable — credential URL"]
+  expiryDate      string      [note: "nullable — mm/yyyy"]
+}
+
+
+// ============================================================
+// COLLECTION: jobs
+// ============================================================
+Table jobs {
+  id              string      [pk, note: "UUIDv4"]
+  _id             ObjectId    [note: "MongoDB ObjectId — internal"]
+  userId          string      [not null, ref: > users.id]
+
+  // Core job details
+  title           string      [not null]
+  company         string      [not null]
+  location        string      [note: "nullable"]
+  salary          string      [note: "nullable — freeform e.g. '£50k–£60k'"]
+  url             string      [note: "nullable — job posting URL"]
+
+  // Dates
+  closingDate     string      [note: "nullable — ISO date string YYYY-MM-DD"]
+  appliedDate     string      [note: "ISO date string YYYY-MM-DD"]
+
+  // Application state
+  status          job_status  [not null, default: 'saved']
+  rejectionFeedback  string   [note: "nullable — post-rejection notes"]
+
+  // Structured details scraped or entered by user
+  description     string      [note: "nullable — full job description"]
+  requirements    string      [note: "nullable — requirements section"]
+  benefits        string      [note: "nullable — benefits section"]
+  notes           string      [note: "nullable — user's own notes"]
+
+  // Reminder settings (embedded)
+  reminder        object      [note: "embedded — see job_reminder"]
+
+  // -------------------------------------------------------
+  // DEPRECATED FIELDS (kept for migration period only)
+  // Will be removed after migrate-documents-to-collection.js
+  // has been run and all documents migrated to documents collection
+  // -------------------------------------------------------
+  resume              object  [note: "DEPRECATED — { content: string, refinedContent: string }"]
+  coverLetter         object  [note: "DEPRECATED — { content: string, refinedContent: string }"]
+  supportingStatement object  [note: "DEPRECATED — { content: string, refinedContent: string }"]
+
+  createdAt       datetime    [not null]
+  updatedAt       datetime    [not null]
+}
+
+Enum job_status {
+  saved
+  applied
+  interview
+  offer
+  rejected
+  withdrawn
+}
+
+Table job_reminder {
+  enabled         boolean     [not null, default: false]
+  daysBefore      integer     [note: "nullable — null uses system defaults (7 and 1 day)"]
+}
+
+
+// ============================================================
+// COLLECTION: documents  (NEW — post-migration)
+// Documents are separated from jobs to allow:
+//   1. Standalone documents not tied to any job application
+//   2. Multiple documents per job per type
+//   3. Server-side version history
+//   4. Independent URL addressability (/document/[id])
+// ============================================================
+Table documents {
+  id              string      [pk, note: "UUIDv4"]
+  _id             ObjectId    [note: "MongoDB ObjectId — internal"]
+  userId          string      [not null, ref: > users.id]
+  jobId           string      [note: "nullable — ref to jobs.id (null for standalone docs)", ref: > jobs.id]
+
+  // Document identity
+  type            doc_type    [not null]
+  title           string      [not null, note: "e.g. 'Resume — Acme Corp' or 'Generic Resume'"]
+  template        string      [not null, note: "ats | modern | creative | formal"]
+
+  // Content — block-based JSON (new format, post Phase 1 of editor enhancement)
+  blocks          array       [note: "block[] — see doc_block; null/empty during migration window"]
+  schemaVersion   integer     [not null, default: 1]
+
+  // LEGACY content fields — retained during migration window, then removed
+  // Populated only when migrating from old jobs.resume / jobs.coverLetter fields
+  legacyContent        string [note: "nullable — raw markdown from old jobs.resume.content"]
+  legacyRefinedContent string [note: "nullable — raw markdown from old jobs.resume.refinedContent"]
+
+  // Server-side version history (moved from localStorage)
+  versions        array       [note: "doc_version[] — up to 20 most recent versions"]
+
+  createdAt       datetime    [not null]
+  updatedAt       datetime    [not null]
+}
+
+Enum doc_type {
+  resume
+  coverLetter
+  supportingStatement
+}
+
+// Structure of each element in documents.blocks[]
+// This is the canonical block schema defined in lib/blockSchema.js
+Table doc_block {
+  id              string      [note: "UUIDv4 — stable across edits"]
+  type            string      [note: "doc-header | section-title | subheading | text | bullet | skill-group | spacer | cl-header | cl-date | cl-recipient | cl-salutation | cl-closing"]
+  data            object      [note: "Type-specific payload — see block type definitions in .ai/enh_document_editor.md §3"]
+}
+
+// Structure of each element in documents.versions[]
+Table doc_version {
+  id              string      [note: "UUIDv4"]
+  timestamp       datetime
+  blocks          array       [note: "Full snapshot of blocks at time of save"]
+  preview         string      [note: "First ~100 chars of document text for display in UI"]
+  triggeredBy     string      [note: "manual | ai-refine | auto"]
+}
+
+
+// ============================================================
+// LOGICAL RELATIONSHIPS (application-enforced, not DB-enforced)
+// ============================================================
+
+Ref: jobs.userId > users.id       // Many jobs belong to one user
+Ref: documents.userId > users.id  // Many documents belong to one user
+Ref: documents.jobId > jobs.id    // Many documents optionally linked to one job

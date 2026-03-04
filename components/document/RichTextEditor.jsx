@@ -193,7 +193,7 @@ function AIRefineButton({ value, onChange, jobId }) {
           <Sparkles className="w-3.5 h-3.5" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-72 p-3 space-y-2" side="top">
+      <PopoverContent className="w-72 p-3 space-y-2 doc-light" side="top">
         <p className="text-xs font-medium text-muted-foreground">AI Refine this paragraph</p>
         <Input
           placeholder="Instructions (e.g. make more concise)"
@@ -322,7 +322,7 @@ export default function RichTextEditor({
                   <Link2 className="w-3 h-3" />
                 </ToolbarButton>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" side="top">
+              <PopoverContent className="w-auto p-0 doc-light" side="top">
                 <LinkPopover editor={editor} onClose={() => setLinkPopoverOpen(false)} />
               </PopoverContent>
             </Popover>

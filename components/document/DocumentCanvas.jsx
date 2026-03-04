@@ -215,7 +215,7 @@ function SubheadingBlock({ block, onChange }) {
           value={data.dateRange || ''}
           onChange={(e) => update({ dateRange: e.target.value })}
           placeholder="Date range"
-          className="border-0 bg-transparent text-xs text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 w-28 text-right p-0"
+          className="border-0 bg-transparent text-xs text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 w-50 text-right p-0"
         />
       </div>
       <div className="flex items-center gap-2">
@@ -229,7 +229,7 @@ function SubheadingBlock({ block, onChange }) {
           value={data.location || ''}
           onChange={(e) => update({ location: e.target.value })}
           placeholder="Location"
-          className="border-0 bg-transparent text-xs text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 w-28 text-right p-0"
+          className="border-0 bg-transparent text-xs text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 w-50 text-right p-0"
         />
       </div>
     </div>
@@ -699,7 +699,7 @@ export default function DocumentCanvas({ blocks, documentType, onChange, jobId }
 
   return (
     <div
-      className="mx-auto bg-white shadow-[0_1px_12px_rgba(0,0,0,0.12)] rounded-sm"
+      className="doc-light mx-auto bg-white shadow-[0_1px_12px_rgba(0,0,0,0.12)] rounded-sm"
       style={{
         width: A4_WIDTH,
         minHeight: A4_MIN_HEIGHT,
@@ -707,6 +707,7 @@ export default function DocumentCanvas({ blocks, documentType, onChange, jobId }
         fontFamily: 'Arial, Helvetica, sans-serif',
         fontSize: 11,
         color: '#111',
+        colorScheme: 'light',
         position: 'relative',
       }}
     >

@@ -481,6 +481,7 @@ function SectionGroup({
   onBlockUpdate,
   onBlockDelete,
   onBlockAdd,
+  onMoveBlock,
   onMoveSection,
   onDeleteSection,
   documentType,
@@ -567,13 +568,25 @@ function SectionGroup({
           {children.map((block, idx) => (
             <div key={block.id} className="group/block relative">
               {/* Block controls */}
-              <div className="absolute -right-6 top-0 flex flex-col gap-0.5 opacity-0 group-hover/block:opacity-100 transition-opacity">
+              <div className="absolute -right-7 top-0 flex flex-col gap-0.5 opacity-0 group-hover/block:opacity-100 transition-opacity">
                 <button
                   type="button"
                   disabled={idx === 0}
-                  onClick={() => onBlockAdd /* reorder up */}
-                  className="hidden"
-                />
+                  onClick={() => onMoveBlock(block.id, 'up')}
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+                  title="Move block up"
+                >
+                  <MoveUp className="w-3 h-3" />
+                </button>
+                <button
+                  type="button"
+                  disabled={idx === children.length - 1}
+                  onClick={() => onMoveBlock(block.id, 'down')}
+                  className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
+                  title="Move block down"
+                >
+                  <MoveDown className="w-3 h-3" />
+                </button>
                 <button
                   type="button"
                   onClick={() => onBlockDelete(block.id)}
@@ -672,6 +685,22 @@ export default function DocumentCanvas({ blocks, documentType, onChange, jobId }
     [blocks, onChange]
   );
 
+  // Move a block up or down within its section
+  const moveBlock = useCallback(
+    (blockId, direction) => {
+      const { preamble: pre, sections: secs } = computeSections(blocks);
+      const newSecs = secs.map((sec) => {
+        const idx = sec.children.findIndex((b) => b.id === blockId);
+        if (idx === -1) return sec;
+        const to = direction === 'up' ? idx - 1 : idx + 1;
+        if (to < 0 || to >= sec.children.length) return sec;
+        return { ...sec, children: arrayMove(sec.children, idx, to) };
+      });
+      onChange(flattenSections({ preamble: pre, sections: newSecs }));
+    },
+    [blocks, onChange]
+  );
+
   // Move section up or down
   const moveSectionInList = useCallback(
     (sectionIndex, direction) => {
@@ -729,6 +758,7 @@ export default function DocumentCanvas({ blocks, documentType, onChange, jobId }
           onBlockUpdate={updateBlock}
           onBlockDelete={deleteBlock}
           onBlockAdd={addBlockToSection}
+          onMoveBlock={moveBlock}
           onMoveSection={moveSectionInList}
           onDeleteSection={deleteSection}
           documentType={documentType}

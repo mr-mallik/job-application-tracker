@@ -906,6 +906,41 @@ async function handleRoute(request, { params }) {
       }
     }
 
+    // Refine a single block's text (per-paragraph AI)
+    if (route === '/documents/refine-block' && method === 'POST') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const body = await request.json();
+      const { text, instructions, jobDescription } = body;
+
+      if (!text) {
+        return handleCORS(NextResponse.json({ error: 'text is required' }, { status: 400 }));
+      }
+
+      const prompt = `You are a professional resume/cover letter editor. Refine the following paragraph.
+
+CURRENT TEXT:
+${text}
+
+${instructions ? `INSTRUCTIONS: ${instructions}\n` : ''}${jobDescription ? `JOB CONTEXT:\n${jobDescription}\n` : ''}
+RULES:
+- Only rephrase/improve what is already there — do NOT invent new facts or experience
+- Return ONLY the refined paragraph text, no headings, no quotes, no explanation
+- Keep it concise`;
+
+      try {
+        const { generateWithFallback } = await import('@/lib/gemini');
+        const refinedText = await generateWithFallback(prompt);
+        return handleCORS(NextResponse.json({ refinedText: refinedText.trim() }));
+      } catch (error) {
+        console.error('Refine-block error:', error);
+        return handleCORS(NextResponse.json({ error: 'Failed to refine block' }, { status: 500 }));
+      }
+    }
+
     // ============ DOCUMENT ROUTES ============
 
     // List all documents for current user

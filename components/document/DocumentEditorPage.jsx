@@ -9,8 +9,9 @@ import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Header } from '@/components/Header';
 import DocumentToolbar from './DocumentToolbar';
-import BlockCanvas from './BlockCanvas';
+import DocumentCanvas from './DocumentCanvas';
 import AIRefineDialog from './AIRefineDialog';
+import { migrateBlocks } from '@/lib/blockSchema';
 
 // PDFPreviewPanel directly imports @react-pdf/renderer templates — must be client-only
 const PDFPreviewPanel = dynamic(() => import('./PDFPreviewPanel'), { ssr: false });
@@ -31,7 +32,8 @@ export default function DocumentEditorPage({ documentId }) {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
-  const [showPreview, setShowPreview] = useState(true);
+  const [showPreview, setShowPreview] = useState(false); // off by default — enable when ready
+  const [previewBlocks, setPreviewBlocks] = useState([]); // only updated on save
 
   const saveTimerRef = useRef(null);
   const dirtyRef = useRef(false);
@@ -61,12 +63,14 @@ export default function DocumentEditorPage({ documentId }) {
 
       const data = await res.json();
       const loaded = data.document;
+      const migratedBlocks = migrateBlocks(loaded.blocks || []);
 
       setDoc(loaded);
       setTitle(loaded.title || '');
       setTemplate(loaded.template || 'ats');
       setDocumentType(loaded.type || 'resume');
-      setBlocks(loaded.blocks || []);
+      setBlocks(migratedBlocks);
+      setPreviewBlocks(migratedBlocks);
       setIsDirty(false);
       dirtyRef.current = false;
     } catch (err) {
@@ -98,6 +102,7 @@ export default function DocumentEditorPage({ documentId }) {
         });
 
         if (!res.ok) throw new Error('Save failed');
+        setPreviewBlocks(currentBlocks); // sync preview after every save
         setIsDirty(false);
         dirtyRef.current = false;
       } catch (err) {
@@ -190,16 +195,16 @@ export default function DocumentEditorPage({ documentId }) {
         }
       />
 
-      {/* Editor + Preview split layout */}
+      {/* Editor: A4 canvas fills remaining space, scrollable */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Block canvas (scrollable left panel) */}
-        <div
-          className={cn(
-            'flex-1 overflow-y-auto p-6 transition-all',
-            showPreview ? 'max-w-xl lg:max-w-2xl' : 'max-w-3xl mx-auto w-full'
-          )}
-        >
-          <BlockCanvas blocks={blocks} documentType={documentType} onChange={handleBlocksChange} />
+        {/* Scrollable A4 canvas area */}
+        <div className="flex-1 overflow-y-auto bg-muted/30 p-8">
+          <DocumentCanvas
+            blocks={blocks}
+            documentType={documentType}
+            onChange={handleBlocksChange}
+            jobId={doc?.jobId || null}
+          />
         </div>
 
         {/* Toggle button */}
@@ -208,8 +213,11 @@ export default function DocumentEditorPage({ documentId }) {
             variant="ghost"
             size="icon"
             className="h-8 w-8"
-            title={showPreview ? 'Hide preview' : 'Show preview'}
-            onClick={() => setShowPreview((v) => !v)}
+            title={showPreview ? 'Hide PDF preview' : 'Show PDF preview'}
+            onClick={() => {
+              if (!showPreview) setPreviewBlocks([...blocks]); // refresh preview on open
+              setShowPreview((v) => !v);
+            }}
           >
             {showPreview ? (
               <PanelLeftClose className="w-4 h-4" />
@@ -219,10 +227,10 @@ export default function DocumentEditorPage({ documentId }) {
           </Button>
         </div>
 
-        {/* PDF Preview panel */}
+        {/* PDF Preview panel — only re-renders when previewBlocks changes */}
         {showPreview && (
           <div className="w-[480px] xl:w-[540px] shrink-0 border-l bg-muted/10 overflow-hidden">
-            <PDFPreviewPanel blocks={blocks} template={template} />
+            <PDFPreviewPanel blocks={previewBlocks} template={template} />
           </div>
         )}
       </div>

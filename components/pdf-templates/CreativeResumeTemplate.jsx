@@ -1,6 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
-import { renderContactLine } from '@/lib/pdfHelpers';
+import { renderContactLine, renderPDFBlock } from '@/lib/pdfHelpers';
+import { BLOCK_TYPES } from '@/lib/blockSchema';
 
 // Creative Resume Template - Two-column layout with visual elements
 const styles = StyleSheet.create({
@@ -110,7 +111,51 @@ const styles = StyleSheet.create({
   },
 });
 
-export default function CreativeResumeTemplate({ data }) {
+export default function CreativeResumeTemplate({ data, blocks }) {
+  // ── New block-based rendering ────────────────────────────────────────────
+  // Creative template: blocks with column:'left' go to the sidebar.
+  if (blocks && blocks.length > 0) {
+    const leftBlocks = blocks.filter((b) => b.data?.column === 'left');
+    const rightBlocks = blocks.filter((b) => b.data?.column !== 'left');
+    // If no explicit column assignments, auto-route by type/section context
+    const hasExplicitColumns = blocks.some((b) => b.data?.column);
+    const headerBlock = blocks.find((b) => b.type === 'doc-header');
+    const nonHeaderBlocks = blocks.filter((b) => b.type !== 'doc-header');
+
+    // Auto-split: section-title + items for skill/education/cert → left; rest → right
+    const autoLeft = [];
+    const autoRight = [];
+    let currentTarget = autoRight;
+    for (const block of nonHeaderBlocks) {
+      if (block.type === 'section-title') {
+        const title = (block.data?.title || '').toLowerCase();
+        currentTarget =
+          title.includes('skill') || title.includes('education') || title.includes('certification')
+            ? autoLeft
+            : autoRight;
+      }
+      currentTarget.push(block);
+    }
+
+    const finalLeft = hasExplicitColumns ? leftBlocks : autoLeft;
+    const finalRight = hasExplicitColumns ? rightBlocks : autoRight;
+
+    return (
+      <Document>
+        <Page size="A4" style={styles.page}>
+          <View style={styles.leftColumn}>
+            {headerBlock && renderPDFBlock(headerBlock, styles)}
+            {finalLeft.map((block) => renderPDFBlock(block, styles, { variant: 'left' }))}
+          </View>
+          <View style={styles.rightColumn}>
+            {finalRight.map((block) => renderPDFBlock(block, styles))}
+          </View>
+        </Page>
+      </Document>
+    );
+  }
+
+  // ── Legacy data-based rendering (backward compat) ────────────────────────
   const { header, sections } = data || {};
 
   // Split sections into left (Skills, Education, Certifications) and right (Experience, Summary, Projects)

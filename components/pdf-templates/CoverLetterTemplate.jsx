@@ -1,5 +1,6 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import { renderPDFBlock } from '@/lib/pdfHelpers';
 
 // Cover Letter / Supporting Statement Template
 const styles = StyleSheet.create({
@@ -66,7 +67,19 @@ const styles = StyleSheet.create({
   },
 });
 
-export default function CoverLetterTemplate({ data, userProfile }) {
+export default function CoverLetterTemplate({ data, blocks, userProfile }) {
+  // ── New block-based rendering ────────────────────────────────────────────
+  if (blocks && blocks.length > 0) {
+    return (
+      <Document>
+        <Page size="A4" style={styles.page}>
+          {blocks.map((block) => renderPDFBlock(block, styles))}
+        </Page>
+      </Document>
+    );
+  }
+
+  // ── Legacy data-based rendering (backward compat) ────────────────────────
   const { paragraphs } = data || {};
 
   return (

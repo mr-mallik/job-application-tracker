@@ -14,7 +14,8 @@ import {
   sendEmail,
 } from '@/lib/auth';
 import { scrapeWithPlaywright, parseWithCheerio, detectJobBoard } from '@/lib/scraper';
-import { classifyJobData, refineDocument } from '@/lib/gemini';
+import { classifyJobData, refineDocument, refineDocumentToBlocks } from '@/lib/gemini';
+import { validateBlockArray } from '@/lib/blockSchema';
 
 // MongoDB connection
 let client;
@@ -503,7 +504,27 @@ async function handleRoute(request, { params }) {
         .sort({ closingDate: -1 })
         .toArray();
 
-      const cleanJobs = jobs.map(({ _id, ...rest }) => rest);
+      // Attach linked document IDs for each job (new document collection)
+      const jobIds = jobs.map((j) => j.id);
+      const linkedDocs = jobIds.length
+        ? await db
+            .collection('documents')
+            .find({ userId: user.id, jobId: { $in: jobIds } })
+            .project({ id: 1, jobId: 1, type: 1, title: 1, template: 1, _id: 0 })
+            .toArray()
+        : [];
+
+      // Build jobId → docs[] map
+      const docsByJob = {};
+      for (const doc of linkedDocs) {
+        if (!docsByJob[doc.jobId]) docsByJob[doc.jobId] = [];
+        docsByJob[doc.jobId].push(doc);
+      }
+
+      const cleanJobs = jobs.map(({ _id, ...rest }) => ({
+        ...rest,
+        documents: docsByJob[rest.id] || [],
+      }));
       return handleCORS(NextResponse.json({ jobs: cleanJobs }));
     }
 
@@ -561,8 +582,15 @@ async function handleRoute(request, { params }) {
         return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }));
       }
 
+      // Attach linked documents
+      const linkedDocs = await db
+        .collection('documents')
+        .find({ userId: user.id, jobId })
+        .project({ id: 1, jobId: 1, type: 1, title: 1, template: 1, updatedAt: 1, _id: 0 })
+        .toArray();
+
       const { _id, ...cleanJob } = job;
-      return handleCORS(NextResponse.json({ job: cleanJob }));
+      return handleCORS(NextResponse.json({ job: { ...cleanJob, documents: linkedDocs } }));
     }
 
     // Update job
@@ -835,6 +863,252 @@ async function handleRoute(request, { params }) {
           NextResponse.json({ error: 'Failed to refine document' }, { status: 500 })
         );
       }
+    }
+
+    // Refine document → blocks (new block-based editor)
+    if (route === '/documents/refine-blocks' && method === 'POST') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const body = await request.json();
+      const { documentType, content, jobDescription, userPreferences, userProfile } = body;
+
+      if (!documentType || !jobDescription) {
+        return handleCORS(
+          NextResponse.json(
+            { error: 'documentType and jobDescription are required' },
+            { status: 400 }
+          )
+        );
+      }
+
+      if (!['resume', 'coverLetter', 'supportingStatement'].includes(documentType)) {
+        return handleCORS(NextResponse.json({ error: 'Invalid document type' }, { status: 400 }));
+      }
+
+      try {
+        const blocks = await refineDocumentToBlocks(
+          documentType,
+          content,
+          jobDescription,
+          userPreferences,
+          userProfile
+        );
+        return handleCORS(NextResponse.json({ blocks }));
+      } catch (error) {
+        console.error('Refine-blocks error:', error);
+        return handleCORS(
+          NextResponse.json({ error: 'Failed to refine document to blocks' }, { status: 500 })
+        );
+      }
+    }
+
+    // ============ DOCUMENT ROUTES ============
+
+    // List all documents for current user
+    if (route === '/documents' && method === 'GET') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const url = new URL(request.url);
+      const jobId = url.searchParams.get('jobId');
+      const type = url.searchParams.get('type');
+
+      const query = { userId: user.id };
+      if (jobId) query.jobId = jobId;
+      if (type) query.type = type;
+
+      const docs = await db
+        .collection('documents')
+        .find(query)
+        .sort({ updatedAt: -1 })
+        .project({ versions: 0 }) // omit bulk version history from list view
+        .toArray();
+
+      const cleanDocs = docs.map(({ _id, ...rest }) => rest);
+      return handleCORS(NextResponse.json({ documents: cleanDocs }));
+    }
+
+    // Create document
+    if (route === '/documents' && method === 'POST') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const body = await request.json();
+      const { type, title, template, blocks, jobId } = body;
+
+      if (!type || !title) {
+        return handleCORS(
+          NextResponse.json({ error: 'type and title are required' }, { status: 400 })
+        );
+      }
+
+      if (blocks && blocks.length > 0) {
+        const validation = validateBlockArray(blocks);
+        if (!validation.valid) {
+          return handleCORS(
+            NextResponse.json(
+              { error: 'Invalid blocks', details: validation.errors },
+              { status: 400 }
+            )
+          );
+        }
+      }
+
+      const doc = {
+        id: uuidv4(),
+        userId: user.id,
+        jobId: jobId || null,
+        type,
+        title,
+        template: template || (type === 'resume' ? 'ats' : 'formal'),
+        blocks: blocks || [],
+        schemaVersion: 1,
+        versions: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await db.collection('documents').insertOne(doc);
+      const { _id, ...cleanDoc } = doc;
+      return handleCORS(NextResponse.json({ document: cleanDoc }, { status: 201 }));
+    }
+
+    // List documents by jobId
+    if (route.match(/^\/documents\/job\/[^/]+$/) && method === 'GET') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const jobId = path[2];
+      const docs = await db
+        .collection('documents')
+        .find({ userId: user.id, jobId })
+        .sort({ updatedAt: -1 })
+        .project({ versions: 0 })
+        .toArray();
+
+      const cleanDocs = docs.map(({ _id, ...rest }) => rest);
+      return handleCORS(NextResponse.json({ documents: cleanDocs }));
+    }
+
+    // Get single document
+    if (route.match(/^\/documents\/[^/]+$/) && method === 'GET') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const docId = path[1];
+      const doc = await db.collection('documents').findOne({ id: docId, userId: user.id });
+
+      if (!doc) {
+        return handleCORS(NextResponse.json({ error: 'Document not found' }, { status: 404 }));
+      }
+
+      const { _id, ...cleanDoc } = doc;
+      return handleCORS(NextResponse.json({ document: cleanDoc }));
+    }
+
+    // Update document
+    if (route.match(/^\/documents\/[^/]+$/) && method === 'PUT') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const docId = path[1];
+      const body = await request.json();
+
+      // Validate blocks if provided
+      if (body.blocks && body.blocks.length > 0) {
+        const validation = validateBlockArray(body.blocks);
+        if (!validation.valid) {
+          return handleCORS(
+            NextResponse.json(
+              { error: 'Invalid blocks', details: validation.errors },
+              { status: 400 }
+            )
+          );
+        }
+      }
+
+      // Fetch current doc to snapshot version
+      const current = await db.collection('documents').findOne({ id: docId, userId: user.id });
+      if (!current) {
+        return handleCORS(NextResponse.json({ error: 'Document not found' }, { status: 404 }));
+      }
+
+      const snapshot = {
+        blocks: current.blocks,
+        template: current.template,
+        title: current.title,
+        savedAt: current.updatedAt,
+      };
+
+      const updates = { updatedAt: new Date() };
+      const allowedFields = ['title', 'template', 'blocks', 'jobId'];
+      for (const field of allowedFields) {
+        if (body[field] !== undefined) updates[field] = body[field];
+      }
+
+      await db.collection('documents').updateOne(
+        { id: docId, userId: user.id },
+        {
+          $set: updates,
+          $push: { versions: { $each: [snapshot], $slice: -50 } }, // keep last 50 versions
+        }
+      );
+
+      const updated = await db
+        .collection('documents')
+        .findOne({ id: docId }, { projection: { _id: 0 } });
+      return handleCORS(NextResponse.json({ document: updated }));
+    }
+
+    // Delete document
+    if (route.match(/^\/documents\/[^/]+$/) && method === 'DELETE') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const docId = path[1];
+      const result = await db.collection('documents').deleteOne({ id: docId, userId: user.id });
+
+      if (result.deletedCount === 0) {
+        return handleCORS(NextResponse.json({ error: 'Document not found' }, { status: 404 }));
+      }
+
+      return handleCORS(NextResponse.json({ message: 'Document deleted' }));
+    }
+
+    // Get document version history
+    if (route.match(/^\/documents\/[^/]+\/versions$/) && method === 'GET') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const docId = path[1];
+      const doc = await db
+        .collection('documents')
+        .findOne({ id: docId, userId: user.id }, { projection: { versions: 1, _id: 0 } });
+
+      if (!doc) {
+        return handleCORS(NextResponse.json({ error: 'Document not found' }, { status: 404 }));
+      }
+
+      // Return in reverse chronological order
+      const versions = (doc.versions || []).slice().reverse();
+      return handleCORS(NextResponse.json({ versions }));
     }
 
     // Route not found

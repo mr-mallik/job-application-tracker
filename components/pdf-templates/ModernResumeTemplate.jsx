@@ -1,6 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
-import { renderContactLine } from '@/lib/pdfHelpers';
+import { renderContactLine, renderPDFBlock } from '@/lib/pdfHelpers';
+import { BLOCK_TYPES } from '@/lib/blockSchema';
 
 // Modern Resume Template - Visual design with accent colors
 const styles = StyleSheet.create({
@@ -104,7 +105,19 @@ const styles = StyleSheet.create({
   },
 });
 
-export default function ModernResumeTemplate({ data }) {
+export default function ModernResumeTemplate({ data, blocks }) {
+  // ── New block-based rendering ────────────────────────────────────────────
+  if (blocks && blocks.length > 0) {
+    return (
+      <Document>
+        <Page size="A4" style={styles.page}>
+          {blocks.map((block) => renderPDFBlock(block, styles))}
+        </Page>
+      </Document>
+    );
+  }
+
+  // ── Legacy data-based rendering (backward compat) ────────────────────────
   const { header, sections } = data;
 
   return (

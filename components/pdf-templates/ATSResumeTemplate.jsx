@@ -1,6 +1,7 @@
 import React from 'react';
 import { Document, Page, Text, View, StyleSheet, Link } from '@react-pdf/renderer';
-import { renderContactLine } from '@/lib/pdfHelpers';
+import { renderContactLine, renderPDFBlock } from '@/lib/pdfHelpers';
+import { BLOCK_TYPES } from '@/lib/blockSchema';
 
 // ATS-Friendly Resume Template - Clean, simple, machine-readable
 const styles = StyleSheet.create({
@@ -94,7 +95,19 @@ const styles = StyleSheet.create({
   },
 });
 
-export default function ATSResumeTemplate({ data }) {
+export default function ATSResumeTemplate({ data, blocks }) {
+  // ── New block-based rendering ────────────────────────────────────────────
+  if (blocks && blocks.length > 0) {
+    return (
+      <Document>
+        <Page size="A4" style={styles.page}>
+          {blocks.map((block) => renderPDFBlock(block, styles))}
+        </Page>
+      </Document>
+    );
+  }
+
+  // ── Legacy data-based rendering (backward compat) ────────────────────────
   const { header, sections } = data || {};
 
   return (

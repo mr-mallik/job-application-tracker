@@ -16,6 +16,7 @@ import {
 import { scrapeWithPlaywright, parseWithCheerio, detectJobBoard } from '@/lib/scraper';
 import { classifyJobData, refineDocument, refineDocumentToBlocks } from '@/lib/gemini';
 import { validateBlockArray } from '@/lib/blockSchema';
+import { markdownToBlocks } from '@/lib/pdfParser';
 
 // MongoDB connection
 let client;
@@ -1109,6 +1110,69 @@ async function handleRoute(request, { params }) {
       // Return in reverse chronological order
       const versions = (doc.versions || []).slice().reverse();
       return handleCORS(NextResponse.json({ versions }));
+    }
+
+    // Migrate legacy embedded document (job.resume / coverLetter / supportingStatement) → documents collection
+    if (route === '/documents/migrate-job' && method === 'POST') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const body = await request.json();
+      const { jobId, documentType } = body;
+
+      if (!jobId || !documentType) {
+        return handleCORS(
+          NextResponse.json({ error: 'jobId and documentType are required' }, { status: 400 })
+        );
+      }
+
+      const job = await db.collection('jobs').findOne({ id: jobId, userId: user.id });
+      if (!job) {
+        return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }));
+      }
+
+      // Check if a document of this type already exists for the job
+      const existing = await db
+        .collection('documents')
+        .findOne({ userId: user.id, jobId, type: documentType });
+      if (existing) {
+        const { _id, ...clean } = existing;
+        return handleCORS(NextResponse.json({ document: clean, alreadyExists: true }));
+      }
+
+      // Pull legacy content (prefer refinedContent > content)
+      const legacyField = job[documentType] || {};
+      const rawContent = legacyField.refinedContent?.trim() || legacyField.content?.trim() || '';
+
+      const blocks = rawContent ? markdownToBlocks(rawContent, documentType) : [];
+
+      const templateMap = { resume: 'ats', coverLetter: 'formal', supportingStatement: 'formal' };
+      const titleMap = {
+        resume: 'Resume',
+        coverLetter: 'Cover Letter',
+        supportingStatement: 'Supporting Statement',
+      };
+
+      const doc = {
+        id: uuidv4(),
+        userId: user.id,
+        jobId,
+        type: documentType,
+        title: `${titleMap[documentType] || documentType} — ${job.title || ''}`.trim(),
+        template: templateMap[documentType] || 'ats',
+        blocks,
+        schemaVersion: 1,
+        versions: [],
+        migratedFromLegacy: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await db.collection('documents').insertOne(doc);
+      const { _id, ...cleanDoc } = doc;
+      return handleCORS(NextResponse.json({ document: cleanDoc }, { status: 201 }));
     }
 
     // Route not found

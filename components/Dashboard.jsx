@@ -26,6 +26,7 @@ import {
   PartyPopper,
   AlertCircle,
   Loader2,
+  Download,
 } from 'lucide-react';
 import { statusColors } from './constants';
 import { JobForm } from './JobForm';
@@ -37,7 +38,7 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState(null);
   const [showAddJob, setShowAddJob] = useState(false);
-  const [filter, setFilter] = useState('all');
+  const [filter, setFilter] = useState('saved'); // default to 'saved' applications
 
   // Merge user root fields with profile for backward compatibility
   // Handle both flat structure (fields at root) and nested structure (user.profile.*)
@@ -96,6 +97,7 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const filteredJobs = filter === 'all' ? jobs : jobs.filter((j) => j.status === filter);
   const stats = {
     total: jobs.length,
+    saved: jobs.filter((j) => j.status === 'saved').length,
     applied: jobs.filter((j) => j.status === 'applied').length,
     interview: jobs.filter((j) => j.status === 'interview').length,
     offer: jobs.filter((j) => j.status === 'offer').length,
@@ -103,7 +105,14 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
   };
 
   const statCards = [
-    // { label: 'Total', value: stats.total, filter: 'all', icon: TrendingUp, color: 'text-primary', bgColor: 'bg-primary/10' },
+    {
+      label: 'Saved',
+      value: stats.saved,
+      filter: 'saved',
+      icon: Download,
+      color: 'text-gray-600 dark:text-gray-400',
+      bgColor: 'bg-gray-100 dark:bg-gray-950',
+    },
     {
       label: 'Applied',
       value: stats.applied,
@@ -235,9 +244,14 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
                                 {job.location && ` • ${job.location}`}
                               </p>
                               <div className="flex flex-wrap gap-2 mt-2 text-xs">
-                                {job.appliedDate && (
-                                  <span className="text-muted-foreground">
+                                {job.status === 'applied' && job.appliedDate && (
+                                  <span className="text-green-600 dark:text-green-400 font-medium">
                                     Applied: {formatDateShort(job.appliedDate)}
+                                  </span>
+                                )}
+                                {job.status === 'saved' && job.appliedDate && (
+                                  <span className="text-muted-foreground">
+                                    Saved: {formatDateShort(job.appliedDate)}
                                   </span>
                                 )}
                                 {job.closingDate && (

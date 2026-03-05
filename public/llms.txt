@@ -1,0 +1,41 @@
+# JobTracker AI – llms.txt
+
+> JobTracker AI is a free, AI-powered job application tracker and document generator for UK and international job seekers.
+
+## What it does
+
+- **Application tracking**: Kanban-style pipeline to track every job from Saved through to Offer or Rejected
+- **Job scraping**: Paste a URL from LinkedIn, Indeed, or other boards — AI extracts title, company, salary, description and requirements automatically
+- **AI CV / Resume generation**: Tailors your existing CV to each specific role using Google Gemini 2.5. UK 2-page format, ATS-optimised, never fabricates information
+- **AI Cover letter generation**: UK-convention letters with proper salutation rules, industry-adapted tone, 1-page target
+- **AI Supporting statements**: Auto-detects essential criteria and writes STAR-format responses for public sector, academic, and executive roles
+- **Block-based document editor**: Rich text editor with live A4 PDF preview and one-click export
+- **Interview tracking**: Log interview stages and outcomes per application
+- **Application reminders**: Set deadline reminders per role
+- **Profile management**: Store experience, education, skills, projects, certifications, and achievements once — reused across all documents
+
+## Technology
+
+- Built with Next.js 14 (App Router), MongoDB, Tailwind CSS, shadcn/ui
+- AI powered by Google Gemini (gemini-2.5-flash with fallback to gemini-2.0-flash)
+- Authentication via JWT with email verification
+- PDF generation client-side via @react-pdf/renderer
+
+## Target users
+
+UK and international job seekers at all levels — graduate to C-suite — across all industries including corporate, public sector, academic, creative, and technical roles.
+
+## Public pages
+
+- `/` — Landing page with feature overview
+- `/auth/login` — Sign in
+- `/auth/register` — Create account
+- `/legal/privacy` — Privacy policy (GDPR / UK DPA 2018 compliant)
+- `/legal/terms` — Terms of service
+- `/legal/cookies` — Cookie policy
+
+## Authenticated-only pages (not crawlable)
+
+- `/dashboard` — Application pipeline
+- `/profile/` — User profile editor
+- `/document/` — Document editor and library

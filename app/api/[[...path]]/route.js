@@ -14,7 +14,8 @@ import {
   sendEmail,
 } from '@/lib/auth';
 import { scrapeWithPlaywright, parseWithCheerio, detectJobBoard } from '@/lib/scraper';
-import { classifyJobData, refineDocument } from '@/lib/gemini';
+import { classifyJobData, refineDocumentToBlocks } from '@/lib/gemini';
+import { validateBlockArray } from '@/lib/blockSchema';
 
 // MongoDB connection
 let client;
@@ -499,11 +500,54 @@ async function handleRoute(request, { params }) {
 
       const jobs = await db
         .collection('jobs')
-        .find({ userId: user.id })
-        .sort({ closingDate: -1 })
+        .aggregate([
+          { $match: { userId: user.id } },
+          {
+            // Add a helper field: 0 = has closing date, 1 = no closing date
+            // Guards against null, missing, AND empty-string closingDate values
+            $addFields: {
+              _hasClosingDate: {
+                $cond: {
+                  if: {
+                    $and: [{ $ne: ['$closingDate', null] }, { $ne: ['$closingDate', ''] }],
+                  },
+                  then: 0,
+                  else: 1,
+                },
+              },
+            },
+          },
+          {
+            $sort: {
+              _hasClosingDate: 1, // jobs with dates (0) before jobs without (1)
+              closingDate: 1, // soonest deadline first among dated jobs
+              createdAt: -1, // most recently added first among undated jobs
+            },
+          },
+        ])
         .toArray();
 
-      const cleanJobs = jobs.map(({ _id, ...rest }) => rest);
+      // Attach linked document IDs for each job (new document collection)
+      const jobIds = jobs.map((j) => j.id);
+      const linkedDocs = jobIds.length
+        ? await db
+            .collection('documents')
+            .find({ userId: user.id, jobId: { $in: jobIds } })
+            .project({ id: 1, jobId: 1, type: 1, title: 1, template: 1, _id: 0 })
+            .toArray()
+        : [];
+
+      // Build jobId → docs[] map
+      const docsByJob = {};
+      for (const doc of linkedDocs) {
+        if (!docsByJob[doc.jobId]) docsByJob[doc.jobId] = [];
+        docsByJob[doc.jobId].push(doc);
+      }
+
+      const cleanJobs = jobs.map(({ _id, _hasClosingDate, ...rest }) => ({
+        ...rest,
+        documents: docsByJob[rest.id] || [],
+      }));
       return handleCORS(NextResponse.json({ jobs: cleanJobs }));
     }
 
@@ -561,8 +605,15 @@ async function handleRoute(request, { params }) {
         return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }));
       }
 
+      // Attach linked documents
+      const linkedDocs = await db
+        .collection('documents')
+        .find({ userId: user.id, jobId })
+        .project({ id: 1, jobId: 1, type: 1, title: 1, template: 1, updatedAt: 1, _id: 0 })
+        .toArray();
+
       const { _id, ...cleanJob } = job;
-      return handleCORS(NextResponse.json({ job: cleanJob }));
+      return handleCORS(NextResponse.json({ job: { ...cleanJob, documents: linkedDocs } }));
     }
 
     // Update job
@@ -797,8 +848,8 @@ async function handleRoute(request, { params }) {
 
     // ============ DOCUMENT ROUTES ============
 
-    // Refine document
-    if (route === '/documents/refine' && method === 'POST') {
+    // Refine document → blocks (new block-based editor)
+    if (route === '/documents/refine-blocks' && method === 'POST') {
       const user = await getAuthUser(request);
       if (!user) {
         return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
@@ -821,20 +872,320 @@ async function handleRoute(request, { params }) {
       }
 
       try {
-        const refinedContent = await refineDocument(
+        const blocks = await refineDocumentToBlocks(
           documentType,
           content,
           jobDescription,
           userPreferences,
           userProfile
         );
-        return handleCORS(NextResponse.json({ refinedContent }));
+        return handleCORS(NextResponse.json({ blocks }));
       } catch (error) {
-        console.error('Refine error:', error);
+        console.error('Refine-blocks error:', error);
         return handleCORS(
-          NextResponse.json({ error: 'Failed to refine document' }, { status: 500 })
+          NextResponse.json({ error: 'Failed to refine document to blocks' }, { status: 500 })
         );
       }
+    }
+
+    // Refine a single block's text (per-paragraph AI)
+    if (route === '/documents/refine-block' && method === 'POST') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const body = await request.json();
+      const { text, instructions, jobDescription } = body;
+
+      if (!text) {
+        return handleCORS(NextResponse.json({ error: 'text is required' }, { status: 400 }));
+      }
+
+      const prompt = `You are a professional resume/cover letter editor. Refine the following paragraph.
+
+CURRENT TEXT:
+${text}
+
+${instructions ? `INSTRUCTIONS: ${instructions}\n` : ''}${jobDescription ? `JOB CONTEXT:\n${jobDescription}\n` : ''}
+RULES:
+- Only rephrase/improve what is already there — do NOT invent new facts or experience
+- Return ONLY the refined paragraph text, no headings, no quotes, no explanation
+- Keep it concise`;
+
+      try {
+        const { generateWithFallback } = await import('@/lib/gemini');
+        const refinedText = await generateWithFallback(prompt);
+        return handleCORS(NextResponse.json({ refinedText: refinedText.trim() }));
+      } catch (error) {
+        console.error('Refine-block error:', error);
+        return handleCORS(NextResponse.json({ error: 'Failed to refine block' }, { status: 500 }));
+      }
+    }
+
+    // ============ DOCUMENT ROUTES ============
+
+    // List all documents for current user
+    if (route === '/documents' && method === 'GET') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const url = new URL(request.url);
+      const jobId = url.searchParams.get('jobId');
+      const type = url.searchParams.get('type');
+
+      const query = { userId: user.id };
+      if (jobId) query.jobId = jobId;
+      if (type) query.type = type;
+
+      const docs = await db
+        .collection('documents')
+        .find(query)
+        .sort({ updatedAt: -1 })
+        .project({ versions: 0 }) // omit bulk version history from list view
+        .toArray();
+
+      const cleanDocs = docs.map(({ _id, ...rest }) => rest);
+      return handleCORS(NextResponse.json({ documents: cleanDocs }));
+    }
+
+    // Create document
+    if (route === '/documents' && method === 'POST') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const body = await request.json();
+      const { type, title, template, blocks, jobId } = body;
+
+      if (!type || !title) {
+        return handleCORS(
+          NextResponse.json({ error: 'type and title are required' }, { status: 400 })
+        );
+      }
+
+      if (blocks && blocks.length > 0) {
+        const validation = validateBlockArray(blocks);
+        if (!validation.valid) {
+          return handleCORS(
+            NextResponse.json(
+              { error: 'Invalid blocks', details: validation.errors },
+              { status: 400 }
+            )
+          );
+        }
+      }
+
+      const doc = {
+        id: uuidv4(),
+        userId: user.id,
+        jobId: jobId || null,
+        type,
+        title,
+        template: template || (type === 'resume' ? 'ats' : 'formal'),
+        blocks: blocks || [],
+        schemaVersion: 1,
+        versions: [],
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await db.collection('documents').insertOne(doc);
+      const { _id, ...cleanDoc } = doc;
+      return handleCORS(NextResponse.json({ document: cleanDoc }, { status: 201 }));
+    }
+
+    // List documents by jobId
+    if (route.match(/^\/documents\/job\/[^/]+$/) && method === 'GET') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const jobId = path[2];
+      const docs = await db
+        .collection('documents')
+        .find({ userId: user.id, jobId })
+        .sort({ updatedAt: -1 })
+        .project({ versions: 0 })
+        .toArray();
+
+      const cleanDocs = docs.map(({ _id, ...rest }) => rest);
+      return handleCORS(NextResponse.json({ documents: cleanDocs }));
+    }
+
+    // Get single document
+    if (route.match(/^\/documents\/[^/]+$/) && method === 'GET') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const docId = path[1];
+      const doc = await db.collection('documents').findOne({ id: docId, userId: user.id });
+
+      if (!doc) {
+        return handleCORS(NextResponse.json({ error: 'Document not found' }, { status: 404 }));
+      }
+
+      const { _id, ...cleanDoc } = doc;
+      return handleCORS(NextResponse.json({ document: cleanDoc }));
+    }
+
+    // Update document
+    if (route.match(/^\/documents\/[^/]+$/) && method === 'PUT') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const docId = path[1];
+      const body = await request.json();
+
+      // Validate blocks if provided
+      if (body.blocks && body.blocks.length > 0) {
+        const validation = validateBlockArray(body.blocks);
+        if (!validation.valid) {
+          return handleCORS(
+            NextResponse.json(
+              { error: 'Invalid blocks', details: validation.errors },
+              { status: 400 }
+            )
+          );
+        }
+      }
+
+      // Fetch current doc to snapshot version
+      const current = await db.collection('documents').findOne({ id: docId, userId: user.id });
+      if (!current) {
+        return handleCORS(NextResponse.json({ error: 'Document not found' }, { status: 404 }));
+      }
+
+      const snapshot = {
+        blocks: current.blocks,
+        template: current.template,
+        title: current.title,
+        savedAt: current.updatedAt,
+      };
+
+      const updates = { updatedAt: new Date() };
+      const allowedFields = ['title', 'template', 'blocks', 'jobId'];
+      for (const field of allowedFields) {
+        if (body[field] !== undefined) updates[field] = body[field];
+      }
+
+      await db.collection('documents').updateOne(
+        { id: docId, userId: user.id },
+        {
+          $set: updates,
+          $push: { versions: { $each: [snapshot], $slice: -50 } }, // keep last 50 versions
+        }
+      );
+
+      const updated = await db
+        .collection('documents')
+        .findOne({ id: docId }, { projection: { _id: 0 } });
+      return handleCORS(NextResponse.json({ document: updated }));
+    }
+
+    // Delete document
+    if (route.match(/^\/documents\/[^/]+$/) && method === 'DELETE') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const docId = path[1];
+      const result = await db.collection('documents').deleteOne({ id: docId, userId: user.id });
+
+      if (result.deletedCount === 0) {
+        return handleCORS(NextResponse.json({ error: 'Document not found' }, { status: 404 }));
+      }
+
+      return handleCORS(NextResponse.json({ message: 'Document deleted' }));
+    }
+
+    // Get document version history
+    if (route.match(/^\/documents\/[^/]+\/versions$/) && method === 'GET') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const docId = path[1];
+      const doc = await db
+        .collection('documents')
+        .findOne({ id: docId, userId: user.id }, { projection: { versions: 1, _id: 0 } });
+
+      if (!doc) {
+        return handleCORS(NextResponse.json({ error: 'Document not found' }, { status: 404 }));
+      }
+
+      // Return in reverse chronological order
+      const versions = (doc.versions || []).slice().reverse();
+      return handleCORS(NextResponse.json({ versions }));
+    }
+
+    // Migrate legacy embedded document (job.resume / coverLetter / supportingStatement) → documents collection
+    if (route === '/documents/migrate-job' && method === 'POST') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const body = await request.json();
+      const { jobId, documentType } = body;
+
+      if (!jobId || !documentType) {
+        return handleCORS(
+          NextResponse.json({ error: 'jobId and documentType are required' }, { status: 400 })
+        );
+      }
+
+      const job = await db.collection('jobs').findOne({ id: jobId, userId: user.id });
+      if (!job) {
+        return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }));
+      }
+
+      // Check if a document of this type already exists for the job
+      const existing = await db
+        .collection('documents')
+        .findOne({ userId: user.id, jobId, type: documentType });
+      if (existing) {
+        const { _id, ...clean } = existing;
+        return handleCORS(NextResponse.json({ document: clean, alreadyExists: true }));
+      }
+
+      const blocks = [];
+
+      const templateMap = { resume: 'ats', coverLetter: 'formal', supportingStatement: 'formal' };
+      const titleMap = {
+        resume: 'Resume',
+        coverLetter: 'Cover Letter',
+        supportingStatement: 'Supporting Statement',
+      };
+
+      const doc = {
+        id: uuidv4(),
+        userId: user.id,
+        jobId,
+        type: documentType,
+        title: `${titleMap[documentType] || documentType} — ${job.title || ''}`.trim(),
+        template: templateMap[documentType] || 'ats',
+        blocks,
+        schemaVersion: 1,
+        versions: [],
+        migratedFromLegacy: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await db.collection('documents').insertOne(doc);
+      const { _id, ...cleanDoc } = doc;
+      return handleCORS(NextResponse.json({ document: cleanDoc }, { status: 201 }));
     }
 
     // Route not found

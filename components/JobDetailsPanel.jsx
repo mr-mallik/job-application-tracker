@@ -36,13 +36,12 @@ import {
   Calendar,
   Loader2,
   FileText,
-  FileSpreadsheet,
-  File,
   FileCheck,
   Sparkles,
+  Files,
 } from 'lucide-react';
 import { JobForm } from './JobForm';
-import { CompactDocumentEditor } from './CompactDocumentEditor';
+import { JobDocumentsTab } from '@/components/document/JobDocumentsTab';
 import { formatDateShort, isPastDate } from '@/lib/dateUtils';
 
 export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userProfile }) {
@@ -226,17 +225,9 @@ export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userP
             <FileText className="w-3 h-3" />
             Details
           </TabsTrigger>
-          <TabsTrigger value="resume" className="text-sm gap-2">
-            <File className="w-3 h-3" />
-            Resume
-          </TabsTrigger>
-          <TabsTrigger value="coverLetter" className="text-sm gap-2">
-            <FileSpreadsheet className="w-3 h-3" />
-            Cover Letter
-          </TabsTrigger>
-          <TabsTrigger value="supportingStatement" className="text-sm gap-2">
-            <FileText className="w-3 h-3" />
-            Statement
+          <TabsTrigger value="documents" className="text-sm gap-2">
+            <Files className="w-3 h-3" />
+            Documents
           </TabsTrigger>
         </TabsList>
 
@@ -340,34 +331,8 @@ export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userP
               )}
             </TabsContent>
 
-            <TabsContent value="resume" className="mt-0">
-              <CompactDocumentEditor
-                job={job}
-                documentType="resume"
-                token={token}
-                onUpdate={onUpdate}
-                userProfile={userProfile}
-              />
-            </TabsContent>
-
-            <TabsContent value="coverLetter" className="mt-0">
-              <CompactDocumentEditor
-                job={job}
-                documentType="coverLetter"
-                token={token}
-                onUpdate={onUpdate}
-                userProfile={userProfile}
-              />
-            </TabsContent>
-
-            <TabsContent value="supportingStatement" className="mt-0">
-              <CompactDocumentEditor
-                job={job}
-                documentType="supportingStatement"
-                token={token}
-                onUpdate={onUpdate}
-                userProfile={userProfile}
-              />
+            <TabsContent value="documents" className="mt-0">
+              <JobDocumentsTab job={job} token={token} />
             </TabsContent>
           </div>
         </div>

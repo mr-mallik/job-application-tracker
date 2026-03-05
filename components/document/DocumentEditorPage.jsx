@@ -3,11 +3,19 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { RefreshCw, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { RefreshCw, PanelLeftClose, PanelLeftOpen, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { Header } from '@/components/Header';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import DocumentToolbar from './DocumentToolbar';
 import DocumentCanvas from './DocumentCanvas';
 import FloatingDocToolbar from './FloatingDocToolbar';
@@ -36,6 +44,8 @@ export default function DocumentEditorPage({ documentId }) {
   const [isDirty, setIsDirty] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
   const [previewBlocks, setPreviewBlocks] = useState([]);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Selection
   const [selectedBlockId, setSelectedBlockId] = useState(null);
@@ -238,6 +248,24 @@ export default function DocumentEditorPage({ documentId }) {
     router.push('/');
   };
 
+  const handleDocumentDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const res = await fetch(`/api/documents/${documentId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      router.push('/document');
+    } catch (err) {
+      console.error(err);
+      toast({ title: 'Delete failed', description: err.message, variant: 'destructive' });
+      setIsDeleting(false);
+      setDeleteOpen(false);
+    }
+  };
+
   // ── Canvas proxy helpers (delegate to DocumentCanvas imperative API) ───────
   const handleAddBlock = useCallback(
     (type) => {
@@ -347,95 +375,130 @@ export default function DocumentEditorPage({ documentId }) {
   }
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
-      <Header user={user} currentPath="/document" onLogout={handleLogout} />
+    <>
+      <div className="flex flex-col h-screen overflow-hidden">
+        <Header user={user} currentPath="/document" onLogout={handleLogout} />
 
-      <DocumentToolbar
-        title={title}
-        documentType={documentType}
-        template={template}
-        blocks={blocks}
-        isSaving={isSaving}
-        isDirty={isDirty}
-        onTitleChange={handleTitleChange}
-        onTemplateChange={handleTemplateChange}
-        onSave={handleManualSave}
-        onFetchFromProfile={documentType === 'resume' ? handleFetchFromProfile : undefined}
-        aiRefineSlot={
-          <AIRefineDialog
-            documentType={documentType}
-            blocks={blocks}
-            jobId={doc?.jobId || null}
-            onApply={(newBlocks) => {
-              handleBlocksChange(newBlocks);
-            }}
-          />
-        }
-      />
-
-      {/* Editor: A4 canvas fills remaining space, scrollable */}
-      <div className="flex flex-1 overflow-hidden">
-        {/* Floating toolbar — left side */}
-        <FloatingDocToolbar
-          selectedBlock={blocks.find((b) => b.id === selectedBlockId) ?? null}
-          selectedBlockIdx={blocks.findIndex((b) => b.id === selectedBlockId)}
-          totalBlocks={blocks.length}
+        <DocumentToolbar
+          title={title}
           documentType={documentType}
-          canUndo={canUndo}
-          canRedo={canRedo}
-          onUndo={handleUndo}
-          onRedo={handleRedo}
-          onAddBlock={handleAddBlock}
-          onDeleteSelected={handleDeleteSelected}
-          onMoveUp={handleMoveUp}
-          onMoveDown={handleMoveDown}
-          onAIRefine={handleAIRefineBlock}
-          isRefining={isRefining}
+          template={template}
+          blocks={blocks}
+          isSaving={isSaving}
+          isDirty={isDirty}
+          onTitleChange={handleTitleChange}
+          onTemplateChange={handleTemplateChange}
+          onSave={handleManualSave}
+          onFetchFromProfile={documentType === 'resume' ? handleFetchFromProfile : undefined}
+          onDeleteClick={() => setDeleteOpen(true)}
+          aiRefineSlot={
+            <AIRefineDialog
+              documentType={documentType}
+              blocks={blocks}
+              jobId={doc?.jobId || null}
+              onApply={(newBlocks) => {
+                handleBlocksChange(newBlocks);
+              }}
+            />
+          }
         />
 
-        {/* Scrollable A4 canvas area */}
-        <div
-          className="flex-1 overflow-y-auto bg-muted/30 p-8"
-          onClick={() => setSelectedBlockId(null)}
-        >
-          <DocumentCanvas
-            ref={canvasRef}
-            blocks={blocks}
+        {/* Editor: A4 canvas fills remaining space, scrollable */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Floating toolbar — left side */}
+          <FloatingDocToolbar
+            selectedBlock={blocks.find((b) => b.id === selectedBlockId) ?? null}
+            selectedBlockIdx={blocks.findIndex((b) => b.id === selectedBlockId)}
+            totalBlocks={blocks.length}
             documentType={documentType}
-            onChange={handleBlocksChange}
-            jobId={doc?.jobId || null}
-            selectedBlockId={selectedBlockId}
-            onSelectionChange={setSelectedBlockId}
+            canUndo={canUndo}
+            canRedo={canRedo}
+            onUndo={handleUndo}
+            onRedo={handleRedo}
+            onAddBlock={handleAddBlock}
+            onDeleteSelected={handleDeleteSelected}
+            onMoveUp={handleMoveUp}
+            onMoveDown={handleMoveDown}
+            onAIRefine={handleAIRefineBlock}
+            isRefining={isRefining}
           />
-        </div>
 
-        {/* Toggle button */}
-        <div className="flex items-start pt-4 px-1 shrink-0">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            title={showPreview ? 'Hide PDF preview' : 'Show PDF preview'}
-            onClick={() => {
-              if (!showPreview) setPreviewBlocks([...blocks]); // refresh preview on open
-              setShowPreview((v) => !v);
-            }}
+          {/* Scrollable A4 canvas area */}
+          <div
+            className="flex-1 overflow-y-auto bg-muted/30 p-8"
+            onClick={() => setSelectedBlockId(null)}
           >
-            {showPreview ? (
-              <PanelLeftClose className="w-4 h-4" />
-            ) : (
-              <PanelLeftOpen className="w-4 h-4" />
-            )}
-          </Button>
-        </div>
-
-        {/* PDF Preview panel — only re-renders when previewBlocks changes */}
-        {showPreview && (
-          <div className="w-[480px] xl:w-[540px] shrink-0 border-l bg-muted/10 overflow-hidden">
-            <PDFPreviewPanel blocks={previewBlocks} template={template} />
+            <DocumentCanvas
+              ref={canvasRef}
+              blocks={blocks}
+              documentType={documentType}
+              onChange={handleBlocksChange}
+              jobId={doc?.jobId || null}
+              selectedBlockId={selectedBlockId}
+              onSelectionChange={setSelectedBlockId}
+            />
           </div>
-        )}
+
+          {/* Toggle button */}
+          <div className="flex items-start pt-4 px-1 shrink-0">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              title={showPreview ? 'Hide PDF preview' : 'Show PDF preview'}
+              onClick={() => {
+                if (!showPreview) setPreviewBlocks([...blocks]); // refresh preview on open
+                setShowPreview((v) => !v);
+              }}
+            >
+              {showPreview ? (
+                <PanelLeftClose className="w-4 h-4" />
+              ) : (
+                <PanelLeftOpen className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
+
+          {/* PDF Preview panel — only re-renders when previewBlocks changes */}
+          {showPreview && (
+            <div className="w-[480px] xl:w-[540px] shrink-0 border-l bg-muted/10 overflow-hidden">
+              <PDFPreviewPanel blocks={previewBlocks} template={template} />
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+
+      {/* ── Delete Document Confirmation Dialog ──────────────────────────── */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Delete document?</DialogTitle>
+            <DialogDescription className="pt-1">
+              <strong>&ldquo;{title || 'Untitled'}&rdquo;</strong> will be permanently deleted. This
+              cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteOpen(false)}
+              disabled={isDeleting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDocumentDelete}
+              disabled={isDeleting}
+            >
+              {isDeleting && <RefreshCw className="w-3 h-3 mr-2 animate-spin" />}
+              {isDeleting ? 'Deleting…' : 'Delete'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

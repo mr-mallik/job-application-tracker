@@ -20,7 +20,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Save, Download, RefreshCw, Circle, Eye, UserRound } from 'lucide-react';
+import { ArrowLeft, Save, Download, RefreshCw, Circle, Eye, UserRound, Trash2 } from 'lucide-react';
 
 // Direct imports required — dynamic() wrappers break @react-pdf/renderer's renderer
 import ATSResumeTemplate from '@/components/pdf-templates/ATSResumeTemplate';
@@ -73,6 +73,7 @@ export default function DocumentToolbar({
   onTemplateChange,
   onSave,
   onFetchFromProfile,
+  onDeleteClick,
   aiRefineSlot,
 }) {
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -164,6 +165,19 @@ export default function DocumentToolbar({
           <Eye className="w-3 h-3 mr-2" />
           PDF
         </Button>
+
+        {/* Delete document */}
+        {onDeleteClick && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            onClick={onDeleteClick}
+            title="Delete document"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </Button>
+        )}
       </div>
 
       {/* ── PDF Preview Dialog ──────────────────────────────────────────── */}

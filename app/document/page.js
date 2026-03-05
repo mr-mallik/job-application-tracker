@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Header } from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -13,7 +14,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { PlusCircle, FileText, Trash2, RefreshCw, ExternalLink } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import { PlusCircle, FileText, FileUser, Mail, ScrollText, Trash2, RefreshCw } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import {
   Table,
@@ -24,10 +33,25 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-const TYPE_LABELS = {
-  resume: 'Resume',
-  coverLetter: 'Cover Letter',
-  supportingStatement: 'Supporting Statement',
+const TYPE_CONFIG = {
+  resume: {
+    label: 'Resume',
+    icon: FileUser,
+    className:
+      'text-blue-600 border-blue-200 bg-blue-50 dark:text-blue-400 dark:border-blue-800 dark:bg-blue-950/40',
+  },
+  coverLetter: {
+    label: 'Cover Letter',
+    icon: Mail,
+    className:
+      'text-emerald-600 border-emerald-200 bg-emerald-50 dark:text-emerald-400 dark:border-emerald-800 dark:bg-emerald-950/40',
+  },
+  supportingStatement: {
+    label: 'Supporting Statement',
+    icon: ScrollText,
+    className:
+      'text-violet-600 border-violet-200 bg-violet-50 dark:text-violet-400 dark:border-violet-800 dark:bg-violet-950/40',
+  },
 };
 
 const TEMPLATE_LABELS = {
@@ -37,6 +61,23 @@ const TEMPLATE_LABELS = {
   formal: 'Formal',
 };
 
+function TypeBadge({ type }) {
+  const cfg = TYPE_CONFIG[type];
+  if (!cfg)
+    return (
+      <Badge variant="outline" className="text-xs">
+        {type}
+      </Badge>
+    );
+  const Icon = cfg.icon;
+  return (
+    <Badge variant="outline" className={`text-xs inline-flex items-center gap-1 ${cfg.className}`}>
+      <Icon className="w-3 h-3" />
+      {cfg.label}
+    </Badge>
+  );
+}
+
 export default function DocumentsPage() {
   const router = useRouter();
   const [user, setUser] = useState(null);
@@ -44,7 +85,9 @@ export default function DocumentsPage() {
   const [jobsMap, setJobsMap] = useState({});
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState('all');
-  const [deletingId, setDeletingId] = useState(null);
+  const [selected, setSelected] = useState(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -79,22 +122,42 @@ export default function DocumentsPage() {
     }
   };
 
-  const handleDelete = async (docId, e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!confirm('Delete this document? This cannot be undone.')) return;
-    setDeletingId(docId);
+  const handleBulkDelete = async () => {
+    setBulkDeleting(true);
     try {
       const token = localStorage.getItem('token');
-      await fetch(`/api/documents/${docId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      setDocuments((prev) => prev.filter((d) => d.id !== docId));
+      await Promise.all(
+        [...selected].map((id) =>
+          fetch(`/api/documents/${id}`, {
+            method: 'DELETE',
+            headers: { Authorization: `Bearer ${token}` },
+          })
+        )
+      );
+      setDocuments((prev) => prev.filter((d) => !selected.has(d.id)));
+      setSelected(new Set());
     } catch (err) {
       console.error(err);
     } finally {
-      setDeletingId(null);
+      setBulkDeleting(false);
+      setBulkDeleteOpen(false);
+    }
+  };
+
+  const toggleSelect = (id, e) => {
+    e.stopPropagation();
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selected.size === filtered.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(filtered.map((d) => d.id)));
     }
   };
 
@@ -110,7 +173,7 @@ export default function DocumentsPage() {
     <>
       <Header user={user} currentPath="/document" onLogout={handleLogout} />
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
+      <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold">Documents</h1>
@@ -127,7 +190,13 @@ export default function DocumentsPage() {
         </div>
 
         <div className="flex items-center gap-3 mb-6">
-          <Select value={filterType} onValueChange={setFilterType}>
+          <Select
+            value={filterType}
+            onValueChange={(v) => {
+              setFilterType(v);
+              setSelected(new Set());
+            }}
+          >
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Filter by type" />
             </SelectTrigger>
@@ -139,6 +208,18 @@ export default function DocumentsPage() {
             </SelectContent>
           </Select>
           <span className="text-sm text-muted-foreground">{filtered.length} document(s)</span>
+
+          {selected.size > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              className="ml-auto"
+              onClick={() => setBulkDeleteOpen(true)}
+            >
+              <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+              Delete {selected.size} selected
+            </Button>
+          )}
         </div>
 
         {loading ? (
@@ -162,22 +243,38 @@ export default function DocumentsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10 pl-4">
+                    <Checkbox
+                      checked={filtered.length > 0 && selected.size === filtered.length}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
                   <TableHead>Title</TableHead>
-                  <TableHead className="w-36">Type</TableHead>
+                  <TableHead className="w-50">Type</TableHead>
                   <TableHead className="w-24">Template</TableHead>
                   <TableHead className="w-36">Last Updated</TableHead>
-                  <TableHead className="w-10" />
+                  <TableHead className="w-10">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {filtered.map((doc) => {
                   const linkedJob = doc.jobId ? jobsMap[doc.jobId] : null;
+                  const isSelected = selected.has(doc.id);
                   return (
                     <TableRow
                       key={doc.id}
                       className="cursor-pointer"
+                      data-state={isSelected ? 'selected' : undefined}
                       onClick={() => router.push(`/document/${doc.id}`)}
                     >
+                      <TableCell className="pl-4" onClick={(e) => toggleSelect(doc.id, e)}>
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => {}}
+                          aria-label={`Select ${doc.title}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">
                         {doc.title}
                         {linkedJob ? (
@@ -191,16 +288,12 @@ export default function DocumentsPage() {
                               )}
                             </div>
                           </div>
-                        ) : doc.jobId ? (
-                          <span className="text-xs text-muted-foreground">Linked to job</span>
                         ) : (
                           <span className="text-xs text-muted-foreground"></span>
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="text-xs">
-                          {TYPE_LABELS[doc.type] || doc.type}
-                        </Badge>
+                        <TypeBadge type={doc.type} />
                       </TableCell>
                       <TableCell>
                         <Badge variant="secondary" className="text-xs">
@@ -212,19 +305,19 @@ export default function DocumentsPage() {
                           ? formatDistanceToNow(new Date(doc.updatedAt), { addSuffix: true })
                           : '—'}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-right">
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-7 w-7 opacity-0 group-hover:opacity-100 hover:opacity-100 text-muted-foreground hover:text-destructive"
-                          onClick={(e) => handleDelete(doc.id, e)}
-                          disabled={deletingId === doc.id}
+                          className="h-7 w-7 hover:opacity-100 text-muted-foreground hover:text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelected(new Set([doc.id]));
+                            setBulkDeleteOpen(true);
+                          }}
+                          disabled={bulkDeleting}
                         >
-                          {deletingId === doc.id ? (
-                            <RefreshCw className="w-3 h-3 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-3 h-3" />
-                          )}
+                          <Trash2 className="w-3 h-3" />
                         </Button>
                       </TableCell>
                     </TableRow>
@@ -235,6 +328,46 @@ export default function DocumentsPage() {
           </div>
         )}
       </main>
+
+      {/* Bulk delete confirmation dialog */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Delete {selected.size} document{selected.size !== 1 ? 's' : ''}?
+            </DialogTitle>
+            <DialogDescription>
+              This will permanently delete{' '}
+              <span className="font-medium text-foreground">
+                {selected.size} document{selected.size !== 1 ? 's' : ''}
+              </span>
+              . This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setBulkDeleteOpen(false)}
+              disabled={bulkDeleting}
+            >
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleting}>
+              {bulkDeleting ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  Deleting…
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5 mr-1.5" />
+                  Delete
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

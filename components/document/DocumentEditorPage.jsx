@@ -10,8 +10,10 @@ import { cn } from '@/lib/utils';
 import { Header } from '@/components/Header';
 import DocumentToolbar from './DocumentToolbar';
 import DocumentCanvas from './DocumentCanvas';
+import FloatingDocToolbar from './FloatingDocToolbar';
 import AIRefineDialog from './AIRefineDialog';
 import { migrateBlocks, getStarterBlocks } from '@/lib/blockSchema';
+import { slateToText, ensureSlate } from '@/lib/slateUtils';
 
 // PDFPreviewPanel directly imports @react-pdf/renderer templates — must be client-only
 const PDFPreviewPanel = dynamic(() => import('./PDFPreviewPanel'), { ssr: false });
@@ -32,8 +34,23 @@ export default function DocumentEditorPage({ documentId }) {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
-  const [showPreview, setShowPreview] = useState(false); // off by default — enable when ready
-  const [previewBlocks, setPreviewBlocks] = useState([]); // only updated on save
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewBlocks, setPreviewBlocks] = useState([]);
+
+  // Selection
+  const [selectedBlockId, setSelectedBlockId] = useState(null);
+
+  // Undo / Redo
+  const [canUndo, setCanUndo] = useState(false);
+  const [canRedo, setCanRedo] = useState(false);
+  const historyPast = useRef([]); // Block[][] — snapshots before each change
+  const historyFuture = useRef([]); // Block[][] — snapshots after undos
+
+  // AI refine state
+  const [isRefining, setIsRefining] = useState(false);
+
+  // Ref to DocumentCanvas imperative API
+  const canvasRef = useRef(null);
 
   const saveTimerRef = useRef(null);
   const dirtyRef = useRef(false);
@@ -132,7 +149,57 @@ export default function DocumentEditorPage({ documentId }) {
     dirtyRef.current = true;
   };
 
+  // ── Undo / Redo ───────────────────────────────────────────────────────────
+  const pushHistory = useCallback((snapshot) => {
+    historyPast.current.push(snapshot);
+    if (historyPast.current.length > 80) historyPast.current.shift();
+    historyFuture.current = [];
+    setCanUndo(true);
+    setCanRedo(false);
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    if (!historyPast.current.length) return;
+    const prev = historyPast.current.pop();
+    historyFuture.current.push(blocks);
+    setBlocks(prev);
+    setSelectedBlockId(null);
+    setCanUndo(historyPast.current.length > 0);
+    setCanRedo(true);
+    markDirty();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks]);
+
+  const handleRedo = useCallback(() => {
+    if (!historyFuture.current.length) return;
+    const next = historyFuture.current.pop();
+    historyPast.current.push(blocks);
+    setBlocks(next);
+    setSelectedBlockId(null);
+    setCanUndo(true);
+    setCanRedo(historyFuture.current.length > 0);
+    markDirty();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks]);
+
+  // Keyboard shortcuts for undo/redo
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') {
+        e.preventDefault();
+        handleUndo();
+      }
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [handleUndo, handleRedo]);
+
   const handleBlocksChange = (newBlocks) => {
+    pushHistory(blocks);
     setBlocks(newBlocks);
     markDirty();
     scheduleAutosave(newBlocks, title, template);
@@ -170,6 +237,105 @@ export default function DocumentEditorPage({ documentId }) {
     localStorage.clear();
     router.push('/');
   };
+
+  // ── Canvas proxy helpers (delegate to DocumentCanvas imperative API) ───────
+  const handleAddBlock = useCallback(
+    (type) => {
+      // canvasRef.current.addBlock inserts after selectedBlockId (or at end)
+      // and internally calls onChange + selects the new block
+      canvasRef.current?.addBlock(type, selectedBlockId);
+    },
+    [selectedBlockId]
+  );
+
+  const handleDeleteSelected = useCallback(() => {
+    if (!selectedBlockId) return;
+    canvasRef.current?.deleteBlock(selectedBlockId);
+  }, [selectedBlockId]);
+
+  const handleMoveUp = useCallback(() => {
+    if (!selectedBlockId) return;
+    canvasRef.current?.moveUp(selectedBlockId);
+  }, [selectedBlockId]);
+
+  const handleMoveDown = useCallback(() => {
+    if (!selectedBlockId) return;
+    canvasRef.current?.moveDown(selectedBlockId);
+  }, [selectedBlockId]);
+
+  // ── AI refine selected block ──────────────────────────────────────────────
+  const handleAIRefineBlock = useCallback(
+    async (instructions) => {
+      if (!selectedBlockId || isRefining) return;
+      const block = canvasRef.current?.getBlock(selectedBlockId);
+      if (!block) return;
+
+      // Extract plain text from the block
+      const slateVal = block.data?.slateContent;
+      const plainText = slateVal ? slateToText(slateVal) : block.data?.text || '';
+      if (!plainText.trim()) {
+        toast({ title: 'Block has no text to refine', variant: 'destructive' });
+        return;
+      }
+
+      setIsRefining(true);
+      try {
+        const token = localStorage.getItem('token');
+
+        // Fetch job description for context if available
+        let jobDescription = '';
+        if (doc?.jobId) {
+          try {
+            const jobRes = await fetch(`/api/jobs/${doc.jobId}`, {
+              headers: { Authorization: `Bearer ${token}` },
+            });
+            if (jobRes.ok) {
+              const jobData = await jobRes.json();
+              jobDescription = jobData.job?.description || '';
+            }
+          } catch {
+            /* ignore, context is optional */
+          }
+        }
+
+        const res = await fetch('/api/documents/refine-block', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ text: plainText, instructions, jobDescription }),
+        });
+
+        if (!res.ok) throw new Error('Refine request failed');
+        const data = await res.json();
+
+        // Apply refined text back to the block.
+        // updateSelectedBlock → onChange → handleBlocksChange, which already
+        // calls pushHistory(blocks) before applying the change.
+        canvasRef.current?.updateSelectedBlock((b) => ({
+          ...b,
+          data: {
+            ...b.data,
+            text: data.refinedText,
+            slateContent: ensureSlate(data.refinedText),
+            // keep slateContent alias for TEXT/BULLET; plain `text` for others
+            ...(b.data?.slateContent !== undefined
+              ? { slateContent: ensureSlate(data.refinedText) }
+              : {}),
+          },
+        }));
+
+        toast({ title: 'Block refined', description: 'AI improvements applied.' });
+      } catch (err) {
+        console.error(err);
+        toast({ title: 'Refine failed', description: err.message, variant: 'destructive' });
+      } finally {
+        setIsRefining(false);
+      }
+    },
+    [selectedBlockId, isRefining, blocks, doc, toast]
+  );
 
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
@@ -209,13 +375,37 @@ export default function DocumentEditorPage({ documentId }) {
 
       {/* Editor: A4 canvas fills remaining space, scrollable */}
       <div className="flex flex-1 overflow-hidden">
+        {/* Floating toolbar — left side */}
+        <FloatingDocToolbar
+          selectedBlock={blocks.find((b) => b.id === selectedBlockId) ?? null}
+          selectedBlockIdx={blocks.findIndex((b) => b.id === selectedBlockId)}
+          totalBlocks={blocks.length}
+          documentType={documentType}
+          canUndo={canUndo}
+          canRedo={canRedo}
+          onUndo={handleUndo}
+          onRedo={handleRedo}
+          onAddBlock={handleAddBlock}
+          onDeleteSelected={handleDeleteSelected}
+          onMoveUp={handleMoveUp}
+          onMoveDown={handleMoveDown}
+          onAIRefine={handleAIRefineBlock}
+          isRefining={isRefining}
+        />
+
         {/* Scrollable A4 canvas area */}
-        <div className="flex-1 overflow-y-auto bg-muted/30 p-8">
+        <div
+          className="flex-1 overflow-y-auto bg-muted/30 p-8"
+          onClick={() => setSelectedBlockId(null)}
+        >
           <DocumentCanvas
+            ref={canvasRef}
             blocks={blocks}
             documentType={documentType}
             onChange={handleBlocksChange}
             jobId={doc?.jobId || null}
+            selectedBlockId={selectedBlockId}
+            onSelectionChange={setSelectedBlockId}
           />
         </div>
 

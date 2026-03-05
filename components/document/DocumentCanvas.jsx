@@ -1,25 +1,12 @@
 'use client';
 
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import {
-  ChevronDown,
-  ChevronRight,
-  Plus,
-  Trash2,
-  GripVertical,
-  Link2,
-  X,
-  PlusCircle,
-  MoveUp,
-  MoveDown,
-} from 'lucide-react';
+import { Link2, X, PlusCircle } from 'lucide-react';
 import { arrayMove } from '@dnd-kit/sortable';
 import {
   BLOCK_TYPES,
-  BLOCK_TYPE_LABELS,
   createTextBlock,
   createBulletBlock,
   createSubheadingBlock,
@@ -71,12 +58,6 @@ export function computeSections(blocks) {
 /** Reconstruct flat blocks array from the structured layout */
 export function flattenSections({ preamble, sections }) {
   return [...preamble, ...sections.flatMap((s) => [s.titleBlock, ...s.children])];
-}
-
-// ─── Inline block update helpers ─────────────────────────────────────────
-
-function updateBlockInList(blocks, id, updater) {
-  return blocks.map((b) => (b.id === id ? updater(b) : b));
 }
 
 // ─── Block renderers ───────────────────────────────────────────────────────
@@ -409,46 +390,45 @@ function BlockRenderer({ block, onChange, jobId }) {
       );
     case BLOCK_TYPES.CL_CLOSING:
       return <ClClosingBlock block={block} onChange={onChange} />;
+    // SECTION_TITLE used by the measurement container only
+    case BLOCK_TYPES.SECTION_TITLE:
+      return (
+        <div className={cn(PAGE_STYLES.sectionTitle, 'uppercase')}>
+          {block.data.title || 'SECTION'}
+        </div>
+      );
     default:
       return null;
   }
 }
 
-// ─── "Add block" inline menu ─────────────────────────────────────────────
-
-const SECTION_BLOCK_ADDITIONS = [
-  { type: BLOCK_TYPES.SUBHEADING, label: 'Subheading (Role/Org)' },
-  { type: BLOCK_TYPES.TEXT, label: 'Paragraph' },
-  { type: BLOCK_TYPES.BULLET, label: 'Bullet Point' },
-  { type: BLOCK_TYPES.SKILL_GROUP, label: 'Skill Group' },
-  { type: BLOCK_TYPES.SPACER, label: 'Spacer' },
-];
+// ─── Add block inline menu ────────────────────────────────────────────────
+// Only shown on letter documents at the bottom of the last page.
+// Resume documents use the FloatingDocToolbar for all add-block actions.
 
 const LETTER_BLOCK_ADDITIONS = [
   { type: BLOCK_TYPES.TEXT, label: 'Paragraph' },
   { type: BLOCK_TYPES.BULLET, label: 'Bullet Point' },
 ];
 
-function InlineAddMenu({ onAdd, documentType }) {
+function InlineAddMenu({ onAdd }) {
   const [open, setOpen] = useState(false);
-  const items = documentType === 'resume' ? SECTION_BLOCK_ADDITIONS : LETTER_BLOCK_ADDITIONS;
 
   if (!open) {
     return (
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full flex items-center justify-center gap-1 py-1 text-xs text-muted-foreground hover:text-primary opacity-1 group-hover:opacity-100 transition-all hover:bg-muted/40 rounded"
+        className="w-full flex items-center justify-center gap-1 py-1.5 text-xs text-muted-foreground hover:text-primary transition-all hover:bg-muted/40 rounded border border-dashed border-gray-200 mt-2"
       >
-        <Plus className="w-3 h-3" />
-        Add block
+        + Add block
       </button>
     );
   }
 
   return (
     <div className="flex flex-wrap gap-1 py-1 px-1 bg-muted/40 rounded mt-0.5">
-      {items.map((item) => (
+      {LETTER_BLOCK_ADDITIONS.map((item) => (
         <button
           key={item.type}
           type="button"
@@ -472,32 +452,170 @@ function InlineAddMenu({ onAdd, documentType }) {
   );
 }
 
-// ─── Section group (collapsible) ──────────────────────────────────────────
+// ─── Flat page renderer ───────────────────────────────────────────────────
+//
+// Pure display: no inline controls. Blocks are clickable to select them.
+// Section-title blocks get an editable heading input.
+// Selection is indicated by a subtle blue ring (no extra space added).
 
-function SectionGroup({
-  section,
-  sectionIndex,
-  totalSections,
-  collapsed,
-  onToggle,
-  onTitleChange,
-  onBlockUpdate,
-  onBlockDelete,
-  onBlockAdd,
-  onMoveBlock,
-  onMoveSection,
-  onDeleteSection,
+function PageBlocks({
+  pageBlocks,
+  allBlocks,
   documentType,
   jobId,
+  onBlockUpdate,
+  onSectionTitleChange,
+  selectedBlockId,
+  onSelectBlock,
+  sections,
 }) {
-  const { titleBlock, children } = section;
+  return (
+    <>
+      {pageBlocks.map((block) => {
+        const isSelected = block.id === selectedBlockId;
 
-  const createBlock = (type) => {
+        // ── Section title block ────────────────────────────────────────────
+        if (block.type === BLOCK_TYPES.SECTION_TITLE) {
+          return (
+            <div
+              key={block.id}
+              className={cn(
+                'mt-1 rounded-sm transition-all cursor-pointer',
+                isSelected && 'ring-2 ring-blue-400 ring-offset-1'
+              )}
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelectBlock(block.id);
+              }}
+            >
+              <input
+                value={block.data.title || ''}
+                onChange={(e) => onSectionTitleChange(block.id, e.target.value)}
+                onClick={(e) => e.stopPropagation()}
+                placeholder="SECTION TITLE"
+                className={cn(
+                  PAGE_STYLES.sectionTitle,
+                  'w-full bg-transparent outline-none border-0 border-b border-gray-300 focus:border-primary py-0.5 transition-colors uppercase placeholder:text-gray-300'
+                )}
+              />
+            </div>
+          );
+        }
+
+        // ── Regular content block ──────────────────────────────────────────
+        return (
+          <div
+            key={block.id}
+            className={cn(
+              'rounded-sm transition-all cursor-pointer',
+              isSelected && 'ring-2 ring-blue-400 ring-offset-1'
+            )}
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectBlock(block.id);
+            }}
+          >
+            <BlockRenderer block={block} onChange={onBlockUpdate} jobId={jobId} />
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+// ─── Main DocumentCanvas ──────────────────────────────────────────────────
+
+/**
+ * A4 HTML canvas — renders the document as styled HTML with inline editing.
+ *
+ * Pages are computed by measuring every block individually in a hidden
+ * off-screen container, then greedily bin-packing blocks into A4-height
+ * pages.  Sections can split across page boundaries.
+ *
+ * Props:
+ *   blocks              Block[]
+ *   documentType        'resume' | 'coverLetter' | 'supportingStatement'
+ *   onChange            (newBlocks: Block[]) => void
+ *   jobId               optional
+ *   selectedBlockId     controlled selection (from parent)
+ *   onSelectionChange   (id | null) => void
+ *
+ * Ref API (via forwardRef + useImperativeHandle):
+ *   addBlock(type, afterId?)   — insert block of given type after afterId (or at end)
+ *   deleteBlock(id)            — delete block by id
+ *   moveUp(id)                 — move block up
+ *   moveDown(id)               — move block down
+ */
+const DocumentCanvas = forwardRef(function DocumentCanvas(
+  { blocks, documentType, onChange, jobId, selectedBlockId, onSelectionChange },
+  ref
+) {
+  const [blockPageMap, setBlockPageMap] = useState({});
+  const [measured, setMeasured] = useState(false);
+  const measureRef = useRef(null);
+
+  const { preamble, sections } = computeSections(blocks);
+
+  // ── Per-block measurement ────────────────────────────────────────────────
+  useEffect(() => {
+    const container = measureRef.current;
+    if (!container) return;
+    const wrappers = Array.from(container.querySelectorAll('[data-mb]'));
+    if (wrappers.length === 0) return;
+
+    const newMap = {};
+    let page = 0;
+    let used = 0;
+
+    for (let i = 0; i < wrappers.length; i++) {
+      const el = wrappers[i];
+      const next = wrappers[i + 1];
+      const h = next ? next.offsetTop - el.offsetTop : container.scrollHeight - el.offsetTop;
+
+      if (used + h > A4_USABLE_HEIGHT && used > 0) {
+        page++;
+        used = 0;
+      }
+      newMap[el.dataset.mb] = page;
+      used += h;
+    }
+
+    setBlockPageMap(newMap);
+    setMeasured(true);
+  }); // no dep-array — re-measure every render
+
+  // ── Page distribution ────────────────────────────────────────────────────
+  const totalPages =
+    !measured || blocks.length === 0
+      ? 1
+      : Math.max(1, Math.max(...Object.values(blockPageMap)) + 1);
+
+  const blocksByPage = Array.from({ length: totalPages }, (_, pageIdx) =>
+    blocks.filter((b) => (blockPageMap[b.id] ?? 0) === pageIdx)
+  );
+
+  // ── Block mutations (inline editing) ─────────────────────────────────────
+
+  const updateBlock = useCallback(
+    (updated) => onChange(blocks.map((b) => (b.id === updated.id ? updated : b))),
+    [blocks, onChange]
+  );
+
+  const updateSectionTitle = useCallback(
+    (titleId, newTitle) =>
+      onChange(
+        blocks.map((b) => (b.id === titleId ? { ...b, data: { ...b.data, title: newTitle } } : b))
+      ),
+    [blocks, onChange]
+  );
+
+  // ── Imperative API (used by FloatingDocToolbar via ref) ────────────────────
+  const makeBlock = useCallback((type) => {
     switch (type) {
+      case BLOCK_TYPES.SECTION_TITLE:
+        return createSectionTitleBlock('NEW SECTION');
       case BLOCK_TYPES.SUBHEADING:
         return createSubheadingBlock();
-      case BLOCK_TYPES.TEXT:
-        return createTextBlock();
       case BLOCK_TYPES.BULLET:
         return createBulletBlock();
       case BLOCK_TYPES.SKILL_GROUP:
@@ -507,269 +625,52 @@ function SectionGroup({
       default:
         return createTextBlock();
     }
-  };
+  }, []);
 
-  return (
-    <div className="group/section mb-2">
-      {/* Section title row */}
-      <div className="flex items-center gap-1 group/title">
-        <button
-          type="button"
-          onClick={onToggle}
-          className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
-          title={collapsed ? 'Expand section' : 'Collapse section'}
-        >
-          {collapsed ? (
-            <ChevronRight className="w-3.5 h-3.5" />
-          ) : (
-            <ChevronDown className="w-3.5 h-3.5" />
-          )}
-        </button>
-
-        <input
-          value={titleBlock.data.title || ''}
-          onChange={(e) => onTitleChange(titleBlock.id, e.target.value)}
-          placeholder="SECTION TITLE"
-          className={cn(
-            PAGE_STYLES.sectionTitle,
-            'flex-1 bg-transparent outline-none border-0 border-b border-gray-300 focus:border-primary py-0.5 transition-colors uppercase placeholder:text-gray-300'
-          )}
-        />
-
-        {/* Section controls — visible on hover */}
-        <div className="flex items-center gap-0.5 opacity-0 group-hover/section:opacity-100 transition-opacity shrink-0">
-          <button
-            type="button"
-            disabled={sectionIndex === 0}
-            onClick={() => onMoveSection(sectionIndex, 'up')}
-            className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-          >
-            <MoveUp className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            disabled={sectionIndex === totalSections - 1}
-            onClick={() => onMoveSection(sectionIndex, 'down')}
-            className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-          >
-            <MoveDown className="w-3.5 h-3.5" />
-          </button>
-          <button
-            type="button"
-            onClick={() => onDeleteSection(sectionIndex)}
-            className="text-muted-foreground hover:text-destructive transition-colors ml-0.5"
-            title="Delete section"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      </div>
-
-      {/* Children */}
-      {!collapsed && (
-        <div className="pl-4 space-y-px mt-1">
-          {children.map((block, idx) => (
-            <div key={block.id} className="group/block relative">
-              {/* Block controls */}
-              <div className="absolute -right-7 top-0 flex flex-col gap-0.5 opacity-0 group-hover/block:opacity-100 transition-opacity">
-                <button
-                  type="button"
-                  disabled={idx === 0}
-                  onClick={() => onMoveBlock(block.id, 'up')}
-                  className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-                  title="Move block up"
-                >
-                  <MoveUp className="w-3 h-3" />
-                </button>
-                <button
-                  type="button"
-                  disabled={idx === children.length - 1}
-                  onClick={() => onMoveBlock(block.id, 'down')}
-                  className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-                  title="Move block down"
-                >
-                  <MoveDown className="w-3 h-3" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onBlockDelete(block.id)}
-                  className="text-muted-foreground hover:text-destructive transition-colors"
-                  title="Delete block"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
-              </div>
-
-              <BlockRenderer block={block} onChange={onBlockUpdate} jobId={jobId} />
-            </div>
-          ))}
-
-          {/* Inline add menu */}
-          <InlineAddMenu
-            onAdd={(type) => onBlockAdd(section.titleBlock.id, createBlock(type))}
-            documentType={documentType}
-          />
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Main DocumentCanvas ──────────────────────────────────────────────────
-
-/**
- * A4 HTML canvas — renders the document as styled HTML with inline editing.
- *
- * Props:
- *   blocks         Block[]
- *   documentType   'resume' | 'coverLetter' | 'supportingStatement'
- *   onChange       (newBlocks: Block[]) => void
- *   jobId          optional, passed to AI refine per block
- */
-export default function DocumentCanvas({ blocks, documentType, onChange, jobId }) {
-  const [collapsedSections, setCollapsedSections] = useState({});
-  // Maps section titleBlock.id → page index (0-based)
-  const [sectionPageMap, setSectionPageMap] = useState({});
-  const measureRef = useRef(null);
-
-  const { preamble, sections } = computeSections(blocks);
-
-  // ── Page-break measurement ──────────────────────────────────────────────
-  useEffect(() => {
-    if (!measureRef.current) return;
-
-    const container = measureRef.current;
-    const newMap = {};
-    let page = 0;
-    let used = 0; // height used on current page
-
-    // Account for preamble height on page 0
-    const preambleEl = container.querySelector('[data-measure="preamble"]');
-    if (preambleEl) {
-      used += preambleEl.offsetHeight;
-    }
-
-    for (const section of sections) {
-      const el = container.querySelector(`[data-measure="${section.titleBlock.id}"]`);
-      const h = el ? el.offsetHeight : 0;
-
-      if (used + h > A4_USABLE_HEIGHT && used > 0) {
-        page++;
-        used = 0;
-      }
-      newMap[section.titleBlock.id] = page;
-      used += h;
-    }
-
-    setSectionPageMap(newMap);
-  }, [blocks]); // re-measure whenever blocks change
-
-  // Derive pages: array of sections[] per page
-  const totalPages =
-    sections.length === 0 ? 1 : Math.max(1, Math.max(0, ...Object.values(sectionPageMap)) + 1);
-  const sectionsByPage = Array.from({ length: totalPages }, (_, pageIdx) =>
-    sections.filter((s) => (sectionPageMap[s.titleBlock.id] ?? 0) === pageIdx)
+  useImperativeHandle(
+    ref,
+    () => ({
+      addBlock(type, afterId) {
+        const newBlock = makeBlock(type);
+        if (!afterId) {
+          onChange([...blocks, newBlock]);
+        } else {
+          // If afterId is a section title, insert after last child of that section
+          const { sections: secs } = computeSections(blocks);
+          const sec = secs.find((s) => s.titleBlock.id === afterId);
+          const insertAfterId = sec?.children?.at(-1)?.id ?? afterId;
+          const idx = blocks.findIndex((b) => b.id === insertAfterId);
+          const next = [...blocks];
+          next.splice(idx + 1, 0, newBlock);
+          onChange(next);
+        }
+        onSelectionChange?.(newBlock.id);
+      },
+      deleteBlock(id) {
+        onChange(blocks.filter((b) => b.id !== id));
+        onSelectionChange?.(null);
+      },
+      moveUp(id) {
+        const idx = blocks.findIndex((b) => b.id === id);
+        if (idx <= 0) return;
+        onChange(arrayMove(blocks, idx, idx - 1));
+      },
+      moveDown(id) {
+        const idx = blocks.findIndex((b) => b.id === id);
+        if (idx < 0 || idx >= blocks.length - 1) return;
+        onChange(arrayMove(blocks, idx, idx + 1));
+      },
+      updateSelectedBlock(updater) {
+        onChange(blocks.map((b) => (b.id === selectedBlockId ? updater(b) : b)));
+      },
+      getBlock(id) {
+        return blocks.find((b) => b.id === id) ?? null;
+      },
+    }),
+    [blocks, onChange, onSelectionChange, selectedBlockId, makeBlock]
   );
 
-  // ── Block mutation helpers ───────────────────────────────────────────────
-
-  const updateBlock = useCallback(
-    (updatedBlock) => {
-      onChange(blocks.map((b) => (b.id === updatedBlock.id ? updatedBlock : b)));
-    },
-    [blocks, onChange]
-  );
-
-  const deleteBlock = useCallback(
-    (id) => {
-      onChange(blocks.filter((b) => b.id !== id));
-    },
-    [blocks, onChange]
-  );
-
-  // Update a section-title block's text
-  const updateSectionTitle = useCallback(
-    (titleId, newTitle) => {
-      onChange(
-        blocks.map((b) => (b.id === titleId ? { ...b, data: { ...b.data, title: newTitle } } : b))
-      );
-    },
-    [blocks, onChange]
-  );
-
-  // Add a new block after the given section's title (at end of that section's children)
-  const addBlockToSection = useCallback(
-    (sectionTitleId, newBlock) => {
-      const flat = [];
-      let insertAfterNext = false;
-      for (const block of blocks) {
-        flat.push(block);
-        if (block.id === sectionTitleId) insertAfterNext = true;
-      }
-
-      // Find last block in that section
-      const { sections: secs } = computeSections(blocks);
-      const sec = secs.find((s) => s.titleBlock.id === sectionTitleId);
-      const lastChild = sec?.children?.at(-1);
-
-      if (lastChild) {
-        const idx = blocks.findIndex((b) => b.id === lastChild.id);
-        const next = [...blocks];
-        next.splice(idx + 1, 0, newBlock);
-        onChange(next);
-      } else {
-        // Empty section — insert right after title
-        const idx = blocks.findIndex((b) => b.id === sectionTitleId);
-        const next = [...blocks];
-        next.splice(idx + 1, 0, newBlock);
-        onChange(next);
-      }
-    },
-    [blocks, onChange]
-  );
-
-  // Move a block up or down within its section
-  const moveBlock = useCallback(
-    (blockId, direction) => {
-      const { preamble: pre, sections: secs } = computeSections(blocks);
-      const newSecs = secs.map((sec) => {
-        const idx = sec.children.findIndex((b) => b.id === blockId);
-        if (idx === -1) return sec;
-        const to = direction === 'up' ? idx - 1 : idx + 1;
-        if (to < 0 || to >= sec.children.length) return sec;
-        return { ...sec, children: arrayMove(sec.children, idx, to) };
-      });
-      onChange(flattenSections({ preamble: pre, sections: newSecs }));
-    },
-    [blocks, onChange]
-  );
-
-  // Move section up or down
-  const moveSectionInList = useCallback(
-    (sectionIndex, direction) => {
-      const { preamble: pre, sections: secs } = computeSections(blocks);
-      const newSecs = [...secs];
-      const to = direction === 'up' ? sectionIndex - 1 : sectionIndex + 1;
-      if (to < 0 || to >= newSecs.length) return;
-      const swapped = arrayMove(newSecs, sectionIndex, to);
-      onChange(flattenSections({ preamble: pre, sections: swapped }));
-    },
-    [blocks, onChange]
-  );
-
-  // Delete an entire section (title + children)
-  const deleteSection = useCallback(
-    (sectionIndex) => {
-      const { preamble: pre, sections: secs } = computeSections(blocks);
-      const newSecs = secs.filter((_, i) => i !== sectionIndex);
-      onChange(flattenSections({ preamble: pre, sections: newSecs }));
-    },
-    [blocks, onChange]
-  );
-
-  const toggleSection = (id) => setCollapsedSections((prev) => ({ ...prev, [id]: !prev[id] }));
-
-  // ── Shared page styles ──────────────────────────────────────────────────
+  // ── Page style ────────────────────────────────────────────────────────
   const pageStyle = {
     width: A4_WIDTH,
     minHeight: A4_MIN_HEIGHT,
@@ -783,57 +684,43 @@ export default function DocumentCanvas({ blocks, documentType, onChange, jobId }
 
   return (
     <>
-      {/* ── Hidden measurement container ─────────────────────────────── */}
-      {/* Invisible but laid-out so offsetHeight is accurate */}
+      {/* ── Hidden measurement container ─────────────────────────────────── */}
       <div
         aria-hidden="true"
         ref={measureRef}
         style={{
-          ...pageStyle,
-          position: 'absolute',
+          position: 'fixed',
           top: 0,
           left: '-9999px',
+          width: A4_WIDTH,
+          padding: `${A4_PADDING_V}px 50px`,
+          fontFamily: 'Arial, Helvetica, sans-serif',
+          fontSize: 11,
           visibility: 'hidden',
           pointerEvents: 'none',
-          minHeight: 0,
+          zIndex: -1,
         }}
       >
-        <div data-measure="preamble">
-          {preamble.map((block) => (
-            <BlockRenderer key={block.id} block={block} onChange={() => {}} jobId={jobId} />
-          ))}
-        </div>
-        {sections.map((section) => (
-          <div key={section.titleBlock.id} data-measure={section.titleBlock.id}>
-            <SectionGroup
-              section={section}
-              sectionIndex={0}
-              totalSections={1}
-              collapsed={false}
-              onToggle={() => {}}
-              onTitleChange={() => {}}
-              onBlockUpdate={() => {}}
-              onBlockDelete={() => {}}
-              onBlockAdd={() => {}}
-              onMoveBlock={() => {}}
-              onMoveSection={() => {}}
-              onDeleteSection={() => {}}
-              documentType={documentType}
-              jobId={jobId}
-            />
+        {blocks.map((block) => (
+          <div key={block.id} data-mb={block.id}>
+            <BlockRenderer block={block} onChange={() => {}} jobId={null} />
           </div>
         ))}
       </div>
 
-      {/* ── Visible paged canvas ─────────────────────────────────────── */}
-      <div className="doc-light flex flex-col items-center" style={{ gap: PAGE_GAP }}>
-        {sectionsByPage.map((pageSections, pageIndex) => (
+      {/* ── Visible paged canvas ───────────────────────────────────────── */}
+      <div
+        className="doc-light flex flex-col items-center"
+        style={{ gap: PAGE_GAP }}
+        onClick={() => onSelectionChange?.(null)} // click outside any block deselects
+      >
+        {blocksByPage.map((pageBlocks, pageIndex) => (
           <div
             key={pageIndex}
             className="bg-white shadow-[0_1px_12px_rgba(0,0,0,0.12)] rounded-sm"
             style={pageStyle}
           >
-            {/* Page label (page 2+) */}
+            {/* Page N label */}
             {pageIndex > 0 && (
               <div
                 style={{
@@ -844,7 +731,7 @@ export default function DocumentCanvas({ blocks, documentType, onChange, jobId }
                   height: PAGE_GAP,
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '12px',
+                  gap: 12,
                   padding: '0 16px',
                   pointerEvents: 'none',
                 }}
@@ -857,59 +744,25 @@ export default function DocumentCanvas({ blocks, documentType, onChange, jobId }
               </div>
             )}
 
-            {/* Preamble only on page 0 */}
-            {pageIndex === 0 &&
-              preamble.map((block) => (
-                <BlockRenderer key={block.id} block={block} onChange={updateBlock} jobId={jobId} />
-              ))}
+            <PageBlocks
+              pageBlocks={pageBlocks}
+              allBlocks={blocks}
+              documentType={documentType}
+              jobId={jobId}
+              onBlockUpdate={updateBlock}
+              onSectionTitleChange={updateSectionTitle}
+              selectedBlockId={selectedBlockId}
+              onSelectBlock={(id) => onSelectionChange?.(id)}
+              sections={sections}
+            />
 
-            {/* Sections assigned to this page */}
-            {pageSections.map((section) => {
-              const idx = sections.indexOf(section);
-              return (
-                <SectionGroup
-                  key={section.titleBlock.id}
-                  section={section}
-                  sectionIndex={idx}
-                  totalSections={sections.length}
-                  collapsed={!!collapsedSections[section.titleBlock.id]}
-                  onToggle={() => toggleSection(section.titleBlock.id)}
-                  onTitleChange={updateSectionTitle}
-                  onBlockUpdate={updateBlock}
-                  onBlockDelete={deleteBlock}
-                  onBlockAdd={addBlockToSection}
-                  onMoveBlock={moveBlock}
-                  onMoveSection={moveSectionInList}
-                  onDeleteSection={deleteSection}
-                  documentType={documentType}
-                  jobId={jobId}
-                />
-              );
-            })}
-
-            {/* ── Add section (resume, last page only) */}
-            {documentType === 'resume' && pageIndex === sectionsByPage.length - 1 && (
-              <button
-                type="button"
-                onClick={() => {
-                  const newSection = createSectionTitleBlock('NEW SECTION');
-                  onChange([...blocks, newSection]);
-                }}
-                className="mt-4 w-full text-xs text-muted-foreground border border-dashed border-gray-300 rounded py-1.5 hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-1"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                Add section
-              </button>
-            )}
-
-            {/* ── Letter add blocks (last page only) */}
-            {documentType !== 'resume' && pageIndex === sectionsByPage.length - 1 && (
+            {/* Letter documents: add-block button at end of last page */}
+            {documentType !== 'resume' && pageIndex === blocksByPage.length - 1 && (
               <InlineAddMenu
                 onAdd={(type) => {
                   const factory = type === BLOCK_TYPES.TEXT ? createTextBlock : createBulletBlock;
                   onChange([...blocks, factory()]);
                 }}
-                documentType={documentType}
               />
             )}
           </div>
@@ -917,4 +770,6 @@ export default function DocumentCanvas({ blocks, documentType, onChange, jobId }
       </div>
     </>
   );
-}
+});
+
+export default DocumentCanvas;

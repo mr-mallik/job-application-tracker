@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -35,6 +35,9 @@ import RichTextEditor from './RichTextEditor';
 // A4 at 96 dpi in pixels
 const A4_WIDTH = 794;
 const A4_MIN_HEIGHT = 1123;
+const A4_PADDING_V = 40; // top + bottom padding (px)
+const A4_USABLE_HEIGHT = A4_MIN_HEIGHT - A4_PADDING_V * 2; // content area per page
+const PAGE_GAP = 32; // grey gap between pages (px)
 
 // ─── Section grouping ──────────────────────────────────────────────────────
 
@@ -625,8 +628,48 @@ function SectionGroup({
  */
 export default function DocumentCanvas({ blocks, documentType, onChange, jobId }) {
   const [collapsedSections, setCollapsedSections] = useState({});
+  // Maps section titleBlock.id → page index (0-based)
+  const [sectionPageMap, setSectionPageMap] = useState({});
+  const measureRef = useRef(null);
 
   const { preamble, sections } = computeSections(blocks);
+
+  // ── Page-break measurement ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!measureRef.current) return;
+
+    const container = measureRef.current;
+    const newMap = {};
+    let page = 0;
+    let used = 0; // height used on current page
+
+    // Account for preamble height on page 0
+    const preambleEl = container.querySelector('[data-measure="preamble"]');
+    if (preambleEl) {
+      used += preambleEl.offsetHeight;
+    }
+
+    for (const section of sections) {
+      const el = container.querySelector(`[data-measure="${section.titleBlock.id}"]`);
+      const h = el ? el.offsetHeight : 0;
+
+      if (used + h > A4_USABLE_HEIGHT && used > 0) {
+        page++;
+        used = 0;
+      }
+      newMap[section.titleBlock.id] = page;
+      used += h;
+    }
+
+    setSectionPageMap(newMap);
+  }, [blocks]); // re-measure whenever blocks change
+
+  // Derive pages: array of sections[] per page
+  const totalPages =
+    sections.length === 0 ? 1 : Math.max(1, Math.max(0, ...Object.values(sectionPageMap)) + 1);
+  const sectionsByPage = Array.from({ length: totalPages }, (_, pageIdx) =>
+    sections.filter((s) => (sectionPageMap[s.titleBlock.id] ?? 0) === pageIdx)
+  );
 
   // ── Block mutation helpers ───────────────────────────────────────────────
 
@@ -726,71 +769,152 @@ export default function DocumentCanvas({ blocks, documentType, onChange, jobId }
 
   const toggleSection = (id) => setCollapsedSections((prev) => ({ ...prev, [id]: !prev[id] }));
 
+  // ── Shared page styles ──────────────────────────────────────────────────
+  const pageStyle = {
+    width: A4_WIDTH,
+    minHeight: A4_MIN_HEIGHT,
+    padding: `${A4_PADDING_V}px 50px`,
+    fontFamily: 'Arial, Helvetica, sans-serif',
+    fontSize: 11,
+    color: '#111',
+    colorScheme: 'light',
+    position: 'relative',
+  };
+
   return (
-    <div
-      className="doc-light mx-auto bg-white shadow-[0_1px_12px_rgba(0,0,0,0.12)] rounded-sm"
-      style={{
-        width: A4_WIDTH,
-        minHeight: A4_MIN_HEIGHT,
-        padding: '40px 50px',
-        fontFamily: 'Arial, Helvetica, sans-serif',
-        fontSize: 11,
-        color: '#111',
-        colorScheme: 'light',
-        position: 'relative',
-      }}
-    >
-      {/* ── Preamble blocks ──────────────────────────────────────────── */}
-      {preamble.map((block) => (
-        <BlockRenderer key={block.id} block={block} onChange={updateBlock} jobId={jobId} />
-      ))}
+    <>
+      {/* ── Hidden measurement container ─────────────────────────────── */}
+      {/* Invisible but laid-out so offsetHeight is accurate */}
+      <div
+        aria-hidden="true"
+        ref={measureRef}
+        style={{
+          ...pageStyle,
+          position: 'absolute',
+          top: 0,
+          left: '-9999px',
+          visibility: 'hidden',
+          pointerEvents: 'none',
+          minHeight: 0,
+        }}
+      >
+        <div data-measure="preamble">
+          {preamble.map((block) => (
+            <BlockRenderer key={block.id} block={block} onChange={() => {}} jobId={jobId} />
+          ))}
+        </div>
+        {sections.map((section) => (
+          <div key={section.titleBlock.id} data-measure={section.titleBlock.id}>
+            <SectionGroup
+              section={section}
+              sectionIndex={0}
+              totalSections={1}
+              collapsed={false}
+              onToggle={() => {}}
+              onTitleChange={() => {}}
+              onBlockUpdate={() => {}}
+              onBlockDelete={() => {}}
+              onBlockAdd={() => {}}
+              onMoveBlock={() => {}}
+              onMoveSection={() => {}}
+              onDeleteSection={() => {}}
+              documentType={documentType}
+              jobId={jobId}
+            />
+          </div>
+        ))}
+      </div>
 
-      {/* ── Sections ──────────────────────────────────────────────────── */}
-      {sections.map((section, idx) => (
-        <SectionGroup
-          key={section.titleBlock.id}
-          section={section}
-          sectionIndex={idx}
-          totalSections={sections.length}
-          collapsed={!!collapsedSections[section.titleBlock.id]}
-          onToggle={() => toggleSection(section.titleBlock.id)}
-          onTitleChange={updateSectionTitle}
-          onBlockUpdate={updateBlock}
-          onBlockDelete={deleteBlock}
-          onBlockAdd={addBlockToSection}
-          onMoveBlock={moveBlock}
-          onMoveSection={moveSectionInList}
-          onDeleteSection={deleteSection}
-          documentType={documentType}
-          jobId={jobId}
-        />
-      ))}
+      {/* ── Visible paged canvas ─────────────────────────────────────── */}
+      <div className="doc-light flex flex-col items-center" style={{ gap: PAGE_GAP }}>
+        {sectionsByPage.map((pageSections, pageIndex) => (
+          <div
+            key={pageIndex}
+            className="bg-white shadow-[0_1px_12px_rgba(0,0,0,0.12)] rounded-sm"
+            style={pageStyle}
+          >
+            {/* Page label (page 2+) */}
+            {pageIndex > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: -PAGE_GAP,
+                  left: 0,
+                  right: 0,
+                  height: PAGE_GAP,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  padding: '0 16px',
+                  pointerEvents: 'none',
+                }}
+              >
+                <div style={{ flex: 1, height: 1, background: '#9ca3af' }} />
+                <span style={{ fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap' }}>
+                  Page {pageIndex + 1}
+                </span>
+                <div style={{ flex: 1, height: 1, background: '#9ca3af' }} />
+              </div>
+            )}
 
-      {/* Add section button (resume only) */}
-      {documentType === 'resume' && (
-        <button
-          type="button"
-          onClick={() => {
-            const newSection = createSectionTitleBlock('NEW SECTION');
-            onChange([...blocks, newSection]);
-          }}
-          className="mt-4 w-full text-xs text-muted-foreground border border-dashed border-gray-300 rounded py-1.5 hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-1"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Add section
-        </button>
-      )}
+            {/* Preamble only on page 0 */}
+            {pageIndex === 0 &&
+              preamble.map((block) => (
+                <BlockRenderer key={block.id} block={block} onChange={updateBlock} jobId={jobId} />
+              ))}
 
-      {/* Letter preamble add blocks */}
-      {documentType !== 'resume' && (
-        <InlineAddMenu
-          onAdd={(type) => {
-            const factory = type === BLOCK_TYPES.TEXT ? createTextBlock : createBulletBlock;
-            onChange([...blocks, factory()]);
-          }}
-          documentType={documentType}
-        />
-      )}
-    </div>
+            {/* Sections assigned to this page */}
+            {pageSections.map((section) => {
+              const idx = sections.indexOf(section);
+              return (
+                <SectionGroup
+                  key={section.titleBlock.id}
+                  section={section}
+                  sectionIndex={idx}
+                  totalSections={sections.length}
+                  collapsed={!!collapsedSections[section.titleBlock.id]}
+                  onToggle={() => toggleSection(section.titleBlock.id)}
+                  onTitleChange={updateSectionTitle}
+                  onBlockUpdate={updateBlock}
+                  onBlockDelete={deleteBlock}
+                  onBlockAdd={addBlockToSection}
+                  onMoveBlock={moveBlock}
+                  onMoveSection={moveSectionInList}
+                  onDeleteSection={deleteSection}
+                  documentType={documentType}
+                  jobId={jobId}
+                />
+              );
+            })}
+
+            {/* ── Add section (resume, last page only) */}
+            {documentType === 'resume' && pageIndex === sectionsByPage.length - 1 && (
+              <button
+                type="button"
+                onClick={() => {
+                  const newSection = createSectionTitleBlock('NEW SECTION');
+                  onChange([...blocks, newSection]);
+                }}
+                className="mt-4 w-full text-xs text-muted-foreground border border-dashed border-gray-300 rounded py-1.5 hover:border-primary hover:text-primary transition-colors flex items-center justify-center gap-1"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add section
+              </button>
+            )}
+
+            {/* ── Letter add blocks (last page only) */}
+            {documentType !== 'resume' && pageIndex === sectionsByPage.length - 1 && (
+              <InlineAddMenu
+                onAdd={(type) => {
+                  const factory = type === BLOCK_TYPES.TEXT ? createTextBlock : createBulletBlock;
+                  onChange([...blocks, factory()]);
+                }}
+                documentType={documentType}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+    </>
   );
 }

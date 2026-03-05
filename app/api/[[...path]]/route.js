@@ -14,7 +14,7 @@ import {
   sendEmail,
 } from '@/lib/auth';
 import { scrapeWithPlaywright, parseWithCheerio, detectJobBoard } from '@/lib/scraper';
-import { classifyJobData, refineDocumentToBlocks } from '@/lib/gemini';
+import { classifyJobData, refineDocumentToBlocks, analyzeKeywords } from '@/lib/gemini';
 import { validateBlockArray } from '@/lib/blockSchema';
 
 // MongoDB connection
@@ -885,6 +885,64 @@ async function handleRoute(request, { params }) {
         return handleCORS(
           NextResponse.json({ error: 'Failed to refine document to blocks' }, { status: 500 })
         );
+      }
+    }
+
+    // Keyword analysis — reads cache from job doc, refreshes on demand
+    if (route === '/documents/analyze-keywords' && method === 'POST') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const body = await request.json();
+      const { jobId, resumeText, force = false } = body;
+
+      if (!jobId || !resumeText) {
+        return handleCORS(
+          NextResponse.json({ error: 'jobId and resumeText are required' }, { status: 400 })
+        );
+      }
+
+      const job = await db.collection('jobs').findOne({ id: jobId, userId: user.id });
+      if (!job) {
+        return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }));
+      }
+
+      // Return cached result unless force-refresh requested
+      if (!force && job.keywordAnalysis) {
+        return handleCORS(NextResponse.json({ analysis: job.keywordAnalysis, cached: true }));
+      }
+
+      const jobDescription = [job.description, job.requirements].filter(Boolean).join('\n\n');
+      if (!jobDescription.trim()) {
+        return handleCORS(
+          NextResponse.json(
+            { error: 'Job has no description or requirements to analyse' },
+            { status: 422 }
+          )
+        );
+      }
+
+      try {
+        const analysis = await analyzeKeywords(resumeText, jobDescription);
+        analysis.analysedAt = new Date().toISOString();
+        analysis.keywordsPresent = analysis.keywords.filter((k) => k.present).map((k) => k.keyword);
+        analysis.keywordsMissing = analysis.keywords
+          .filter((k) => !k.present)
+          .map((k) => k.keyword);
+
+        await db
+          .collection('jobs')
+          .updateOne(
+            { id: jobId, userId: user.id },
+            { $set: { keywordAnalysis: analysis, updatedAt: new Date() } }
+          );
+
+        return handleCORS(NextResponse.json({ analysis, cached: false }));
+      } catch (error) {
+        console.error('Keyword analysis error:', error);
+        return handleCORS(NextResponse.json({ error: 'Keyword analysis failed' }, { status: 500 }));
       }
     }
 

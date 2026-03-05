@@ -20,7 +20,7 @@ import DocumentToolbar from './DocumentToolbar';
 import DocumentCanvas from './DocumentCanvas';
 import FloatingDocToolbar from './FloatingDocToolbar';
 import AIRefineDialog from './AIRefineDialog';
-import { migrateBlocks, getStarterBlocks } from '@/lib/blockSchema';
+import { migrateBlocks, getStarterBlocks, blocksToPreview } from '@/lib/blockSchema';
 import { slateToText, ensureSlate } from '@/lib/slateUtils';
 
 // PDFPreviewPanel directly imports @react-pdf/renderer templates — must be client-only
@@ -421,6 +421,8 @@ export default function DocumentEditorPage({ documentId }) {
             onMoveDown={handleMoveDown}
             onAIRefine={handleAIRefineBlock}
             isRefining={isRefining}
+            jobId={doc?.jobId || null}
+            resumeText={documentType === 'resume' ? blocksToPreview(blocks, 8000) : ''}
           />
 
           {/* Scrollable A4 canvas area */}

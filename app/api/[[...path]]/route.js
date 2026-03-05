@@ -14,9 +14,8 @@ import {
   sendEmail,
 } from '@/lib/auth';
 import { scrapeWithPlaywright, parseWithCheerio, detectJobBoard } from '@/lib/scraper';
-import { classifyJobData, refineDocument, refineDocumentToBlocks } from '@/lib/gemini';
+import { classifyJobData, refineDocumentToBlocks } from '@/lib/gemini';
 import { validateBlockArray } from '@/lib/blockSchema';
-import { markdownToBlocks } from '@/lib/pdfParser';
 
 // MongoDB connection
 let client;
@@ -849,46 +848,6 @@ async function handleRoute(request, { params }) {
 
     // ============ DOCUMENT ROUTES ============
 
-    // Refine document
-    if (route === '/documents/refine' && method === 'POST') {
-      const user = await getAuthUser(request);
-      if (!user) {
-        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
-      }
-
-      const body = await request.json();
-      const { documentType, content, jobDescription, userPreferences, userProfile } = body;
-
-      if (!documentType || !jobDescription) {
-        return handleCORS(
-          NextResponse.json(
-            { error: 'documentType and jobDescription are required' },
-            { status: 400 }
-          )
-        );
-      }
-
-      if (!['resume', 'coverLetter', 'supportingStatement'].includes(documentType)) {
-        return handleCORS(NextResponse.json({ error: 'Invalid document type' }, { status: 400 }));
-      }
-
-      try {
-        const refinedContent = await refineDocument(
-          documentType,
-          content,
-          jobDescription,
-          userPreferences,
-          userProfile
-        );
-        return handleCORS(NextResponse.json({ refinedContent }));
-      } catch (error) {
-        console.error('Refine error:', error);
-        return handleCORS(
-          NextResponse.json({ error: 'Failed to refine document' }, { status: 500 })
-        );
-      }
-    }
-
     // Refine document → blocks (new block-based editor)
     if (route === '/documents/refine-blocks' && method === 'POST') {
       const user = await getAuthUser(request);
@@ -1200,11 +1159,7 @@ RULES:
         return handleCORS(NextResponse.json({ document: clean, alreadyExists: true }));
       }
 
-      // Pull legacy content (prefer refinedContent > content)
-      const legacyField = job[documentType] || {};
-      const rawContent = legacyField.refinedContent?.trim() || legacyField.content?.trim() || '';
-
-      const blocks = rawContent ? markdownToBlocks(rawContent, documentType) : [];
+      const blocks = [];
 
       const templateMap = { resume: 'ats', coverLetter: 'formal', supportingStatement: 'formal' };
       const titleMap = {

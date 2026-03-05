@@ -60,8 +60,13 @@ function makeStyles({ accentColor = '#374151', pagePadding = 30, baseFontSize = 
     bulletContainer: { flexDirection: 'row', marginBottom: 3 },
     bulletPoint: { width: 12, fontSize: baseFontSize - 1, color: '#374151' },
     bulletText: { flex: 1, fontSize: baseFontSize - 1, color: '#374151', lineHeight: 1.4 },
-    skillsContainer: { flexDirection: 'row', flexWrap: 'wrap' },
-    skill: { fontSize: baseFontSize - 2, color: '#374151', marginRight: 8, marginBottom: 4 },
+    skillsContainer: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      alignItems: 'center',
+      alignContent: 'center',
+    },
+    skill: { fontSize: baseFontSize - 2, color: '#374151', marginRight: 8 },
   });
 }
 

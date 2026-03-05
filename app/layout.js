@@ -1,14 +1,30 @@
 import './globals.css';
 import { Toaster } from 'sonner';
 import { Inter } from 'next/font/google';
-import Link from 'next/link';
 import { ThemeProvider } from '@/components/theme-provider';
 
 const inter = Inter({ subsets: ['latin'] });
 
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://jobtracker.ai';
+
 export const metadata = {
-  title: 'Job Application Tracker',
-  description: 'Track your job applications with AI-powered document generation',
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: 'JobTracker AI – AI-Powered Job Application Tracker',
+    template: '%s – JobTracker AI',
+  },
+  description:
+    'Track every job application, generate tailored AI resumes, cover letters and supporting statements in seconds. Land your next role faster with JobTracker AI.',
+  applicationName: 'JobTracker AI',
+  authors: [{ name: 'JobTracker AI' }],
+  creator: 'JobTracker AI',
+  robots: { index: true, follow: true },
+  openGraph: {
+    siteName: 'JobTracker AI',
+    locale: 'en_GB',
+    type: 'website',
+  },
+  twitter: { card: 'summary_large_image' },
 };
 
 export default function RootLayout({ children }) {
@@ -22,36 +38,6 @@ export default function RootLayout({ children }) {
           disableTransitionOnChange
         >
           <div className="flex-1">{children}</div>
-          <footer className="flex justify-center items-center py-4 border-t bg-card/50 backdrop-blur-sm">
-            <span className="text-sm text-muted-foreground">
-              © {new Date().getFullYear()} Job Application Tracker. All rights reserved.
-            </span>
-            <span className="mx-2 text-muted-foreground">|</span>
-            <Link
-              href="/legal/cookies"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3"
-            >
-              Cookies
-            </Link>
-            <span className="text-muted-foreground">•</span>
-            <Link
-              href="/legal/privacy"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3"
-            >
-              Privacy
-            </Link>
-            <span className="text-muted-foreground">•</span>
-            <Link
-              href="/legal/terms"
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors px-3"
-            >
-              Terms
-            </Link>
-            <span className="mx-2 text-muted-foreground">|</span>
-            <span className="text-sm text-muted-foreground">
-              Built with Next.js and Tailwind CSS
-            </span>
-          </footer>
           <Toaster position="top-right" richColors />
         </ThemeProvider>
       </body>

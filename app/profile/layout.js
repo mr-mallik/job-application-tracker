@@ -36,7 +36,7 @@ export default function ProfileLayout({ children }) {
     const userData = localStorage.getItem('user');
 
     if (!token || !userData) {
-      router.push('/');
+      router.push('/auth/login');
       return;
     }
 

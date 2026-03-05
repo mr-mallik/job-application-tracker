@@ -3,18 +3,21 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { RefreshCw } from 'lucide-react';
+import { Header } from '@/components/Header';
 
-export default function DocumentLayout({ children }) {
+export default function DashboardLayout({ children }) {
   const router = useRouter();
+  const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
     if (!token || !userData) {
-      router.push('/auth/login');
+      router.replace('/auth/login');
       return;
     }
+    setUser(JSON.parse(userData));
     setReady(true);
   }, [router]);
 
@@ -26,5 +29,17 @@ export default function DocumentLayout({ children }) {
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      <Header
+        user={user}
+        currentPath="/dashboard"
+        onLogout={() => {
+          localStorage.clear();
+          router.replace('/');
+        }}
+      />
+      {children}
+    </>
+  );
 }

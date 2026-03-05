@@ -16,7 +16,7 @@ import {
 import { ThemeToggle } from '@/components/theme-toggle';
 
 const navigation = [
-  { name: 'Dashboard', href: '/', icon: Home },
+  { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Documents', href: '/document', icon: Files },
 ];
 

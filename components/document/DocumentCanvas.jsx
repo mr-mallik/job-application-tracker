@@ -67,8 +67,7 @@ const PAGE_STYLES = {
   name: 'text-2xl font-bold uppercase tracking-wide text-center',
   designation: 'text-sm text-gray-500 text-center mt-1',
   contactRow: 'flex flex-wrap justify-center gap-x-3 mt-1.5 text-xs text-gray-500',
-  sectionTitle:
-    'text-sm font-bold uppercase tracking-wider border-b border-gray-300 pb-1 mb-2 mt-1',
+  sectionTitle: 'text-sm font-bold uppercase tracking-wider border-b border-gray-300 pb-1 mt-1',
   subheadingPrimary: 'text-sm font-semibold',
   subheadingMeta: 'text-xs text-gray-500',
   text: 'text-sm text-gray-700 leading-relaxed',
@@ -491,7 +490,10 @@ function PageBlocks({
               <input
                 value={block.data.title || ''}
                 onChange={(e) => onSectionTitleChange(block.id, e.target.value)}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onSelectBlock(block.id);
+                }}
                 placeholder="SECTION TITLE"
                 className={cn(
                   PAGE_STYLES.sectionTitle,
@@ -557,6 +559,11 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
   const { preamble, sections } = computeSections(blocks);
 
   // ── Per-block measurement ────────────────────────────────────────────────
+  // Uses a ref to track the last serialised map so setState is only called
+  // when page assignments actually change — prevents the infinite-loop that
+  // would occur if setState triggered a re-render that re-ran this effect.
+  const prevMapSerialRef = useRef('');
+
   useEffect(() => {
     const container = measureRef.current;
     if (!container) return;
@@ -580,9 +587,13 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
       used += h;
     }
 
-    setBlockPageMap(newMap);
-    setMeasured(true);
-  }); // no dep-array — re-measure every render
+    const serial = JSON.stringify(newMap);
+    if (serial !== prevMapSerialRef.current) {
+      prevMapSerialRef.current = serial;
+      setBlockPageMap(newMap);
+      setMeasured(true);
+    }
+  }); // no dep-array — re-measure after every render, but only setState on change
 
   // ── Page distribution ────────────────────────────────────────────────────
   const totalPages =

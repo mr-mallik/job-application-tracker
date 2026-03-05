@@ -501,8 +501,31 @@ async function handleRoute(request, { params }) {
 
       const jobs = await db
         .collection('jobs')
-        .find({ userId: user.id })
-        .sort({ closingDate: -1 })
+        .aggregate([
+          { $match: { userId: user.id } },
+          {
+            // Add a helper field: 0 = has closing date, 1 = no closing date
+            // Guards against null, missing, AND empty-string closingDate values
+            $addFields: {
+              _hasClosingDate: {
+                $cond: {
+                  if: {
+                    $and: [{ $ne: ['$closingDate', null] }, { $ne: ['$closingDate', ''] }],
+                  },
+                  then: 0,
+                  else: 1,
+                },
+              },
+            },
+          },
+          {
+            $sort: {
+              _hasClosingDate: 1, // jobs with dates (0) before jobs without (1)
+              closingDate: 1, // soonest deadline first among dated jobs
+              createdAt: -1, // most recently added first among undated jobs
+            },
+          },
+        ])
         .toArray();
 
       // Attach linked document IDs for each job (new document collection)
@@ -522,7 +545,7 @@ async function handleRoute(request, { params }) {
         docsByJob[doc.jobId].push(doc);
       }
 
-      const cleanJobs = jobs.map(({ _id, ...rest }) => ({
+      const cleanJobs = jobs.map(({ _id, _hasClosingDate, ...rest }) => ({
         ...rest,
         documents: docsByJob[rest.id] || [],
       }));

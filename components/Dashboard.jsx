@@ -244,9 +244,14 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
                                 {job.location && ` • ${job.location}`}
                               </p>
                               <div className="flex flex-wrap gap-2 mt-2 text-xs">
-                                {job.appliedDate && (
-                                  <span className="text-muted-foreground">
+                                {job.status === 'applied' && job.appliedDate && (
+                                  <span className="text-green-600 dark:text-green-400 font-medium">
                                     Applied: {formatDateShort(job.appliedDate)}
+                                  </span>
+                                )}
+                                {job.status === 'saved' && job.appliedDate && (
+                                  <span className="text-muted-foreground">
+                                    Saved: {formatDateShort(job.appliedDate)}
                                   </span>
                                 )}
                                 {job.closingDate && (

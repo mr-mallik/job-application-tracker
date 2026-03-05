@@ -14,7 +14,12 @@ import {
   sendEmail,
 } from '@/lib/auth';
 import { scrapeWithPlaywright, parseWithCheerio, detectJobBoard } from '@/lib/scraper';
-import { classifyJobData, refineDocumentToBlocks, analyzeKeywords } from '@/lib/gemini';
+import {
+  classifyJobData,
+  refineDocumentToBlocks,
+  analyzeKeywords,
+  generateInterviewQuestions,
+} from '@/lib/gemini';
 import { validateBlockArray } from '@/lib/blockSchema';
 
 // MongoDB connection
@@ -128,6 +133,21 @@ async function getAuthUser(request) {
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   const token = authHeader.substring(7);
   return getUserFromToken(token);
+}
+
+function requireAIAccess(user) {
+  if (user?.AI_enabled !== 'YES') {
+    return handleCORS(
+      NextResponse.json(
+        {
+          error:
+            'AI features are not enabled for your account. Please contact support at gulgermallik@gmail.com to enable AI access.',
+        },
+        { status: 403 }
+      )
+    );
+  }
+  return null;
 }
 
 export async function OPTIONS() {
@@ -254,6 +274,8 @@ async function handleRoute(request, { params }) {
       if (!user) {
         return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
+      const aiDenied = requireAIAccess(user);
+      if (aiDenied) return aiDenied;
 
       const body = await request.json();
       const { base64Content } = body;
@@ -361,6 +383,8 @@ async function handleRoute(request, { params }) {
       if (!user) {
         return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
+      const aiDenied = requireAIAccess(user);
+      if (aiDenied) return aiDenied;
 
       const body = await request.json();
       const { url } = body;
@@ -455,6 +479,8 @@ async function handleRoute(request, { params }) {
       if (!user) {
         return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
+      const aiDenied = requireAIAccess(user);
+      if (aiDenied) return aiDenied;
 
       const body = await request.json();
       const { text } = body;
@@ -854,6 +880,8 @@ async function handleRoute(request, { params }) {
       if (!user) {
         return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
+      const aiDenied = requireAIAccess(user);
+      if (aiDenied) return aiDenied;
 
       const body = await request.json();
       const { documentType, content, jobDescription, userPreferences, userProfile } = body;
@@ -894,6 +922,8 @@ async function handleRoute(request, { params }) {
       if (!user) {
         return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
+      const aiDenied = requireAIAccess(user);
+      if (aiDenied) return aiDenied;
 
       const body = await request.json();
       const { jobId, resumeText, force = false } = body;
@@ -974,6 +1004,8 @@ async function handleRoute(request, { params }) {
       if (!user) {
         return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
+      const aiDenied = requireAIAccess(user);
+      if (aiDenied) return aiDenied;
 
       const body = await request.json();
       const { text, instructions, jobDescription } = body;
@@ -1266,6 +1298,117 @@ RULES:
       await db.collection('documents').insertOne(doc);
       const { _id, ...cleanDoc } = doc;
       return handleCORS(NextResponse.json({ document: cleanDoc }, { status: 201 }));
+    }
+
+    // ============ INTERVIEW ROUTES ============
+
+    // Fetch saved interview questions for a job
+    if (route === '/jobs/interview-questions' && method === 'GET') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const jobId = request.nextUrl.searchParams.get('jobId');
+      if (!jobId) {
+        return handleCORS(
+          NextResponse.json({ error: 'jobId query param is required' }, { status: 400 })
+        );
+      }
+
+      const doc = await db
+        .collection('interview_questions')
+        .findOne({ jobId, userId: user.id }, { projection: { _id: 0 } });
+
+      return handleCORS(NextResponse.json({ questions: doc?.questions || [] }));
+    }
+
+    // Generate + persist interview questions (append or replace)
+    if (route === '/jobs/interview-questions' && method === 'POST') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+      const aiDenied = requireAIAccess(user);
+      if (aiDenied) return aiDenied;
+
+      const body = await request.json();
+      const { jobId, level, type, count, mode = 'replace' } = body;
+
+      if (!jobId || !level || !type || !count) {
+        return handleCORS(
+          NextResponse.json(
+            { error: 'jobId, level, type, and count are required' },
+            { status: 400 }
+          )
+        );
+      }
+
+      const job = await db.collection('jobs').findOne({ id: jobId, userId: user.id });
+      if (!job) {
+        return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }));
+      }
+
+      // Load existing saved questions (needed for append deduplication)
+      const existingDoc = await db
+        .collection('interview_questions')
+        .findOne({ jobId, userId: user.id }, { projection: { _id: 0 } });
+      const existingQuestions = existingDoc?.questions || [];
+
+      try {
+        const safeCount = Math.min(Math.max(parseInt(count) || 5, 1), 20);
+        const newQuestions = await generateInterviewQuestions({
+          jobTitle: job.title,
+          company: job.company,
+          jobDescription: job.description,
+          requirements: job.requirements,
+          userProfile: user,
+          level,
+          type,
+          count: safeCount,
+          existingQuestions: mode === 'append' ? existingQuestions : [],
+        });
+
+        // Stamp each new question with id, level, type, createdAt
+        const now = new Date();
+        const stamped = newQuestions.map((q) => ({
+          id: uuidv4(),
+          question: q.question,
+          answer: q.answer,
+          tip: q.tip || null,
+          level,
+          type,
+          createdAt: now,
+        }));
+
+        const finalQuestions = mode === 'append' ? [...existingQuestions, ...stamped] : stamped;
+
+        await db.collection('interview_questions').updateOne(
+          { jobId, userId: user.id },
+          {
+            $set: {
+              questions: finalQuestions,
+              updatedAt: now,
+            },
+            $setOnInsert: {
+              id: uuidv4(),
+              jobId,
+              userId: user.id,
+              createdAt: now,
+            },
+          },
+          { upsert: true }
+        );
+
+        return handleCORS(
+          NextResponse.json({ questions: finalQuestions, newCount: stamped.length })
+        );
+      } catch (error) {
+        console.error('Interview questions error:', error);
+        return handleCORS(
+          NextResponse.json({ error: 'Failed to generate interview questions' }, { status: 500 })
+        );
+      }
     }
 
     // Route not found

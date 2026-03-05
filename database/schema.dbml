@@ -27,6 +27,7 @@ Table users {
   verificationExpiry  datetime [note: "nullable — expiry for verificationCode"]
   resetCode       string      [note: "nullable — 6-digit password reset code"]
   resetExpiry     datetime    [note: "nullable — 1-hour expiry for resetCode"]
+  AI_enabled      string      [note: "nullable — set to 'YES' by admin to grant AI feature access; null by default (no access)"]
 
   // Nested profile object (embedded document)
   // See Table user_profile below for field breakdown
@@ -229,9 +230,53 @@ Table doc_version {
 
 
 // ============================================================
+// COLLECTION: interview_questions
+// One document per job. Questions are persisted here and can
+// be appended to or fully replaced. Each question carries its
+// own level/type so mixed-strategy sets are representable.
+// ============================================================
+Table interview_questions {
+  id              string      [pk, note: "UUIDv4"]
+  _id             ObjectId    [note: "MongoDB ObjectId — internal"]
+  jobId           string      [not null, ref: > jobs.id]
+  userId          string      [not null, ref: > users.id]
+
+  questions       array       [note: "interview_question[] — see sub-table below"]
+
+  createdAt       datetime    [not null]
+  updatedAt       datetime    [not null]
+}
+
+// Embedded sub-document: interview_questions.questions[]
+Table interview_question {
+  id              string      [note: "UUIDv4 — stable per question"]
+  question        string      [not null]
+  answer          string      [not null, note: "Model answer — 150–300 words"]
+  tip             string      [note: "nullable — what the interviewer is assessing"]
+  level           string      [not null, note: "fresh | mid | senior"]
+  type            string      [not null, note: "technical | behavioural | mixed"]
+  createdAt       datetime    [not null]
+}
+
+Enum interview_level {
+  fresh
+  mid
+  senior
+}
+
+Enum interview_type {
+  technical
+  behavioural
+  mixed
+}
+
+
+// ============================================================
 // LOGICAL RELATIONSHIPS (application-enforced, not DB-enforced)
 // ============================================================
 
-Ref: jobs.userId > users.id       // Many jobs belong to one user
-Ref: documents.userId > users.id  // Many documents belong to one user
-Ref: documents.jobId > jobs.id    // Many documents optionally linked to one job
+Ref: jobs.userId > users.id                        // Many jobs belong to one user
+Ref: documents.userId > users.id                   // Many documents belong to one user
+Ref: documents.jobId > jobs.id                     // Many documents optionally linked to one job
+Ref: interview_questions.jobId > jobs.id           // One question set per job
+Ref: interview_questions.userId > users.id         // Scoped to the owning user

@@ -436,6 +436,7 @@ export default function DocumentEditorPage({ documentId }) {
               jobId={doc?.jobId || null}
               selectedBlockId={selectedBlockId}
               onSelectionChange={setSelectedBlockId}
+              userProfile={user ? { name: user.name, ...user.profile } : null}
             />
           </div>
 

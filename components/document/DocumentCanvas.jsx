@@ -2,8 +2,16 @@
 
 import { useState, useCallback, useRef, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { Link2, X, PlusCircle } from 'lucide-react';
+import { Link2, X, PlusCircle, Pencil, ExternalLink } from 'lucide-react';
 import { arrayMove } from '@dnd-kit/sortable';
 import {
   BLOCK_TYPES,
@@ -13,6 +21,7 @@ import {
   createSkillGroupBlock,
   createSpacerBlock,
   createSectionTitleBlock,
+  createDocHeaderBlock,
 } from '@/lib/blockSchema';
 import { ensureSlate, slateToText } from '@/lib/slateUtils';
 import RichTextEditor from './RichTextEditor';
@@ -76,11 +85,91 @@ const PAGE_STYLES = {
   skillTags: 'text-xs text-gray-700',
 };
 
+// ─── Links editor dialog ──────────────────────────────────────────────────
+
+function LinksEditorDialog({ links, open, onOpenChange, onSave }) {
+  const [draft, setDraft] = useState(links);
+
+  // Reset draft whenever the dialog opens
+  useEffect(() => {
+    if (open) setDraft(links);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const updateRow = (i, partial) => {
+    const next = [...draft];
+    next[i] = { ...next[i], ...partial };
+    setDraft(next);
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Manage contact links</DialogTitle>
+        </DialogHeader>
+
+        <div className="flex flex-col gap-2 py-1 max-h-72 overflow-y-auto pr-1">
+          {draft.map((lnk, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <Input
+                value={lnk.label || ''}
+                onChange={(e) => updateRow(i, { label: e.target.value })}
+                placeholder="Label"
+                className="h-8 text-xs w-28 shrink-0"
+              />
+              <Link2 className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+              <Input
+                value={lnk.url || ''}
+                onChange={(e) => updateRow(i, { url: e.target.value })}
+                placeholder="https://…"
+                className="h-8 text-xs flex-1"
+              />
+              <button
+                type="button"
+                onClick={() => setDraft(draft.filter((_, j) => j !== i))}
+                className="text-muted-foreground hover:text-destructive transition-colors shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setDraft([...draft, { label: '', url: '' }])}
+          className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 mt-1"
+        >
+          <PlusCircle className="w-3.5 h-3.5" />
+          Add link
+        </button>
+
+        <DialogFooter className="mt-2">
+          <Button variant="outline" size="sm" onClick={() => onOpenChange(false)}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              onSave(draft.filter((l) => l.label || l.url));
+              onOpenChange(false);
+            }}
+          >
+            Save
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ─── DocHeader block renderer ─────────────────────────────────────────────
 
 function DocHeaderBlock({ block, onChange }) {
   const { data } = block;
   const links = data.links || [];
+  const [dialogOpen, setDialogOpen] = useState(false);
 
   const update = (partial) => onChange({ ...block, data: { ...data, ...partial } });
 
@@ -103,51 +192,45 @@ function DocHeaderBlock({ block, onChange }) {
         className="border-0 bg-transparent text-center text-sm text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5"
       />
 
-      {/* Contact links — structured rows */}
-      <div className="mt-2 space-y-1">
-        {links.map((lnk, i) => (
-          <div key={i} className="flex items-center justify-center gap-1.5">
-            <Input
-              value={lnk.label || ''}
-              onChange={(e) => {
-                const next = [...links];
-                next[i] = { ...next[i], label: e.target.value };
-                update({ links: next });
-              }}
-              placeholder="Label (e.g. LinkedIn)"
-              className="h-6 text-xs w-28 border-dashed"
-            />
-            <Link2 className="w-3 h-3 text-muted-foreground shrink-0" />
-            <Input
-              value={lnk.url || ''}
-              onChange={(e) => {
-                const next = [...links];
-                next[i] = { ...next[i], url: e.target.value };
-                update({ links: next });
-              }}
-              placeholder="https://..."
-              className="h-6 text-xs w-44 border-dashed"
-            />
-            <button
-              type="button"
-              onClick={() => {
-                update({ links: links.filter((_, j) => j !== i) });
-              }}
-              className="text-muted-foreground hover:text-destructive transition-colors"
+      {/* Contact links — compact chip row */}
+      <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-1 mt-2">
+        {links.length > 0 ? (
+          links.map((lnk, i) => (
+            <span
+              key={i}
+              className="inline-flex items-center gap-1 text-xs text-gray-500 px-1.5 py-0.5 rounded bg-gray-50 border border-gray-200"
             >
-              <X className="w-3 h-3" />
-            </button>
-          </div>
-        ))}
+              {lnk.url ? (
+                <ExternalLink className="w-2.5 h-2.5 shrink-0 text-gray-400" />
+              ) : (
+                <Link2 className="w-2.5 h-2.5 shrink-0 text-gray-400" />
+              )}
+              {lnk.label || lnk.url || '—'}
+            </span>
+          ))
+        ) : (
+          <span className="text-xs text-gray-300 italic">No contact links</span>
+        )}
         <button
           type="button"
-          onClick={() => update({ links: [...links, { label: '', url: '' }] })}
-          className="text-xs text-muted-foreground hover:text-primary flex items-center gap-1 mx-auto mt-1"
+          onClick={(e) => {
+            e.stopPropagation();
+            setDialogOpen(true);
+          }}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors px-1.5 py-0.5 rounded hover:bg-muted"
+          title="Edit links"
         >
-          <PlusCircle className="w-3 h-3" />
-          Add link
+          <Pencil className="w-3 h-3" />
+          Edit links
         </button>
       </div>
+
+      <LinksEditorDialog
+        links={links}
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        onSave={(newLinks) => update({ links: newLinks })}
+      />
     </div>
   );
 }
@@ -548,6 +631,32 @@ function PageBlocks({
   );
 }
 
+// ─── Header helper ───────────────────────────────────────────────────────
+
+/**
+ * Build the structured links array for a DOC_HEADER block from a user profile.
+ */
+function buildLinksFromProfile(profile) {
+  if (!profile) return [];
+  const links = [];
+  if (profile.email) links.push({ label: profile.email, url: `mailto:${profile.email}` });
+  if (profile.phone) links.push({ label: profile.phone, url: `tel:${profile.phone}` });
+  if (profile.location) links.push({ label: profile.location, url: '' });
+  if (profile.linkedin) {
+    const url = profile.linkedin.startsWith('http')
+      ? profile.linkedin
+      : `https://${profile.linkedin}`;
+    links.push({ label: 'LinkedIn', url });
+  }
+  if (profile.portfolio) {
+    const url = profile.portfolio.startsWith('http')
+      ? profile.portfolio
+      : `https://${profile.portfolio}`;
+    links.push({ label: 'Portfolio', url });
+  }
+  return links;
+}
+
 // ─── Main DocumentCanvas ──────────────────────────────────────────────────
 
 /**
@@ -572,7 +681,7 @@ function PageBlocks({
  *   moveDown(id)               — move block down
  */
 const DocumentCanvas = forwardRef(function DocumentCanvas(
-  { blocks, documentType, onChange, jobId, selectedBlockId, onSelectionChange },
+  { blocks, documentType, onChange, jobId, selectedBlockId, onSelectionChange, userProfile },
   ref
 ) {
   const [blockPageMap, setBlockPageMap] = useState({});
@@ -580,6 +689,20 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
   const measureRef = useRef(null);
 
   const { preamble, sections } = computeSections(blocks);
+
+  // ── Auto-inject DOC_HEADER for resumes when AI-generated blocks omit it ───
+  useEffect(() => {
+    if (documentType !== 'resume') return;
+    if (blocks.length === 0) return;
+    if (blocks[0]?.type === BLOCK_TYPES.DOC_HEADER) return;
+    const headerBlock = createDocHeaderBlock({
+      name: userProfile?.name || '',
+      designation: userProfile?.headline || userProfile?.designation || '',
+      links: buildLinksFromProfile(userProfile),
+    });
+    onChange([headerBlock, ...blocks]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blocks, documentType]);
 
   // ── Per-block measurement ────────────────────────────────────────────────
   // Uses a ref to track the last serialised map so setState is only called
@@ -644,22 +767,31 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
   );
 
   // ── Imperative API (used by FloatingDocToolbar via ref) ────────────────────
-  const makeBlock = useCallback((type) => {
-    switch (type) {
-      case BLOCK_TYPES.SECTION_TITLE:
-        return createSectionTitleBlock('NEW SECTION');
-      case BLOCK_TYPES.SUBHEADING:
-        return createSubheadingBlock();
-      case BLOCK_TYPES.BULLET:
-        return createBulletBlock();
-      case BLOCK_TYPES.SKILL_GROUP:
-        return createSkillGroupBlock();
-      case BLOCK_TYPES.SPACER:
-        return createSpacerBlock();
-      default:
-        return createTextBlock();
-    }
-  }, []);
+  const makeBlock = useCallback(
+    (type) => {
+      switch (type) {
+        case BLOCK_TYPES.DOC_HEADER:
+          return createDocHeaderBlock({
+            name: userProfile?.name || '',
+            designation: userProfile?.headline || userProfile?.designation || '',
+            links: buildLinksFromProfile(userProfile),
+          });
+        case BLOCK_TYPES.SECTION_TITLE:
+          return createSectionTitleBlock('NEW SECTION');
+        case BLOCK_TYPES.SUBHEADING:
+          return createSubheadingBlock();
+        case BLOCK_TYPES.BULLET:
+          return createBulletBlock();
+        case BLOCK_TYPES.SKILL_GROUP:
+          return createSkillGroupBlock();
+        case BLOCK_TYPES.SPACER:
+          return createSpacerBlock();
+        default:
+          return createTextBlock();
+      }
+    },
+    [userProfile]
+  );
 
   useImperativeHandle(
     ref,

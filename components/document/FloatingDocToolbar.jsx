@@ -24,6 +24,7 @@ import {
   AlignLeft,
   Layers,
   LayoutTemplate,
+  Contact,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -35,6 +36,7 @@ import { BLOCK_TYPES } from '@/lib/blockSchema';
 // ─── Block type palette ────────────────────────────────────────────────────
 
 const ALL_BLOCK_OPTIONS = [
+  { type: BLOCK_TYPES.DOC_HEADER, label: 'Header (Name)', icon: Contact, resumeOnly: true },
   { type: BLOCK_TYPES.TEXT, label: 'Paragraph', icon: AlignLeft, resumeOnly: false },
   { type: BLOCK_TYPES.BULLET, label: 'Bullet', icon: List, resumeOnly: false },
   { type: BLOCK_TYPES.SUBHEADING, label: 'Subheading', icon: Type, resumeOnly: false },

@@ -75,29 +75,38 @@ function KeywordPanel({ jobId, resumeText }) {
     [jobId, resumeText]
   );
 
-  // Auto-sync after 4 s of inactivity when analysis already exists
+  // Client-side keyword presence re-check whenever resume text changes
+  // No AI involved — just string matching + debounced DB save
   useEffect(() => {
-    if (!analysisRef.current || !jobId) return;
+    if (!analysisRef.current?.keywords?.length || !jobId) return;
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
-    syncTimerRef.current = setTimeout(async () => {
+    syncTimerRef.current = setTimeout(() => {
+      const textLower = resumeText.toLowerCase();
+      const updated = analysisRef.current.keywords.map((kw) => ({
+        ...kw,
+        present: textLower.includes(kw.keyword.toLowerCase()),
+      }));
+      const presentCount = updated.filter((k) => k.present).length;
+      const newScore = Math.round((presentCount / updated.length) * 100);
+      const updatedAnalysis = {
+        ...analysisRef.current,
+        keywords: updated,
+        keywordsPresent: updated.filter((k) => k.present).map((k) => k.keyword),
+        keywordsMissing: updated.filter((k) => !k.present).map((k) => k.keyword),
+        score: newScore,
+        updatedAt: new Date().toISOString(),
+      };
+      setAnalysis(updatedAnalysis);
       setSyncing(true);
-      try {
-        const token = localStorage.getItem('token');
-        const res = await fetch('/api/documents/analyze-keywords', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ jobId, resumeText, force: true }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          setAnalysis(data.analysis);
-        }
-      } catch {
-        // silent fail — background sync
-      } finally {
-        setSyncing(false);
-      }
-    }, 4000);
+      const token = localStorage.getItem('token');
+      fetch('/api/documents/update-keyword-presence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ jobId, keywordAnalysis: updatedAnalysis }),
+      })
+        .catch(() => {})
+        .finally(() => setSyncing(false));
+    }, 1500);
     return () => clearTimeout(syncTimerRef.current);
   }, [resumeText, jobId]); // eslint-disable-line react-hooks/exhaustive-deps
 

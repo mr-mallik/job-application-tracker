@@ -946,6 +946,28 @@ async function handleRoute(request, { params }) {
       }
     }
 
+    // Lightweight keyword presence update — no AI, DB write only
+    if (route === '/documents/update-keyword-presence' && method === 'POST') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+      const body = await request.json();
+      const { jobId, keywordAnalysis } = body;
+      if (!jobId || !keywordAnalysis) {
+        return handleCORS(
+          NextResponse.json({ error: 'jobId and keywordAnalysis are required' }, { status: 400 })
+        );
+      }
+      await db
+        .collection('jobs')
+        .updateOne(
+          { id: jobId, userId: user.id },
+          { $set: { keywordAnalysis, updatedAt: new Date() } }
+        );
+      return handleCORS(NextResponse.json({ ok: true }));
+    }
+
     // Refine a single block's text (per-paragraph AI)
     if (route === '/documents/refine-block' && method === 'POST') {
       const user = await getAuthUser(request);

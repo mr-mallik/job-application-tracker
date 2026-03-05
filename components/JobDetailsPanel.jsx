@@ -39,9 +39,11 @@ import {
   FileCheck,
   Sparkles,
   Files,
+  MessageSquare,
 } from 'lucide-react';
 import { JobForm } from './JobForm';
 import { JobDocumentsTab } from '@/components/document/JobDocumentsTab';
+import { InterviewTab } from '@/components/document/InterviewTab';
 import { formatDateShort, isPastDate } from '@/lib/dateUtils';
 
 export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userProfile }) {
@@ -229,6 +231,12 @@ export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userP
             <Files className="w-3 h-3" />
             Documents
           </TabsTrigger>
+          {job.status === 'interview' && (
+            <TabsTrigger value="interview" className="text-sm gap-2">
+              <MessageSquare className="w-3 h-3" />
+              Interview
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <div className="flex-1 overflow-y-auto">
@@ -334,6 +342,11 @@ export function JobDetailsPanel({ job, token, onUpdate, onClose, onDelete, userP
             <TabsContent value="documents" className="mt-0">
               <JobDocumentsTab job={job} token={token} />
             </TabsContent>
+            {job.status === 'interview' && (
+              <TabsContent value="interview" className="mt-0">
+                <InterviewTab job={job} token={token} />
+              </TabsContent>
+            )}
           </div>
         </div>
       </Tabs>

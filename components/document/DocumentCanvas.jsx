@@ -221,21 +221,44 @@ function SubheadingBlock({ block, onChange }) {
 
 // ─── SkillGroup block ─────────────────────────────────────────────────────
 
+function AutoResizeTextarea({ value, onChange, placeholder, className }) {
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = '0px';
+    el.style.height = `${el.scrollHeight}px`;
+  }, [value]);
+
+  return (
+    <textarea
+      ref={ref}
+      value={value}
+      rows={1}
+      onChange={onChange}
+      placeholder={placeholder}
+      className={className}
+      style={{ overflow: 'hidden', resize: 'none' }}
+    />
+  );
+}
+
 function SkillGroupBlock({ block, onChange }) {
   const { data } = block;
   const update = (partial) => onChange({ ...block, data: { ...data, ...partial } });
   const skillsStr = (data.skills || []).join(', ');
 
   return (
-    <div className="flex items-baseline gap-2 mb-1">
+    <div className="flex items-start gap-2 mb-1">
       <Input
         value={data.label || ''}
         onChange={(e) => update({ label: e.target.value })}
         placeholder="Category"
-        className="border-0 bg-transparent text-xs font-semibold text-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 w-28 p-0 shrink-0"
+        className="border-0 bg-transparent text-xs font-semibold text-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 w-28 p-0 shrink-0 mt-px"
       />
-      <span className="text-xs text-gray-400 shrink-0">:</span>
-      <Input
+      <span className="text-xs text-gray-400 shrink-0 mt-px">:</span>
+      <AutoResizeTextarea
         value={skillsStr}
         onChange={(e) =>
           update({
@@ -246,7 +269,7 @@ function SkillGroupBlock({ block, onChange }) {
           })
         }
         placeholder="Skill 1, Skill 2, Skill 3"
-        className="border-0 bg-transparent text-xs text-gray-700 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 flex-1 p-0"
+        className="border-0 bg-transparent text-xs text-gray-700 outline-none w-full p-0 leading-relaxed"
       />
     </div>
   );

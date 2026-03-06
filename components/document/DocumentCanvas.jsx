@@ -420,6 +420,125 @@ function ClClosingBlock({ block, onChange }) {
   );
 }
 
+// ─── Lightweight block renderer for the hidden measurement container ──────
+// Must NOT render Slate editors — the visible canvas already holds Slate
+// instances for every block.  Sharing the same slateContent objects between
+// two editors causes "Unable to find the path for Slate node" crashes.
+
+function MeasureBlockRenderer({ block }) {
+  switch (block.type) {
+    case BLOCK_TYPES.DOC_HEADER: {
+      const { data } = block;
+      return (
+        <div className="mb-4 text-center space-y-1">
+          <div className={PAGE_STYLES.name}>{data.name || 'Full Name'}</div>
+          <div className="text-sm text-gray-500 mt-1">{data.designation || ''}</div>
+          <div className="flex flex-wrap justify-center gap-x-2 mt-2">
+            {(data.links || []).map((l, i) => (
+              <span key={i} className="text-xs text-gray-500">
+                {l.label || l.url}
+              </span>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    case BLOCK_TYPES.CL_HEADER: {
+      const { data } = block;
+      return (
+        <div className="mb-4 space-y-1">
+          <div className="font-semibold text-base">{data.name || ''}</div>
+          {['email', 'phone', 'location'].map((f) => (
+            <div key={f} className="text-xs text-gray-500">
+              {data[f] || ''}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    case BLOCK_TYPES.TEXT:
+      return (
+        <div className={PAGE_STYLES.text}>
+          {slateToText(block.data.slateContent ?? block.data.text) || '\u00a0'}
+        </div>
+      );
+    case BLOCK_TYPES.BULLET:
+      return (
+        <div className="flex items-start gap-1.5 my-0.5">
+          <span className="mt-[3px] text-gray-500 select-none text-xs">•</span>
+          <div className={PAGE_STYLES.bullet} style={{ flex: 1 }}>
+            {slateToText(block.data.slateContent ?? block.data.text) || '\u00a0'}
+          </div>
+        </div>
+      );
+    case BLOCK_TYPES.SUBHEADING: {
+      const { data } = block;
+      return (
+        <div className="mb-1.5 mt-2">
+          <div className="flex items-start justify-between gap-2">
+            <div className="font-semibold text-[0.85rem] flex-1">{data.primary || ''}</div>
+            <div className="text-xs text-gray-500 w-50 text-right">{data.dateRange || ''}</div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="text-xs text-gray-500 flex-1">{data.secondary || ''}</div>
+            <div className="text-xs text-gray-500 w-50 text-right">{data.location || ''}</div>
+          </div>
+        </div>
+      );
+    }
+    case BLOCK_TYPES.SKILL_GROUP: {
+      const { data } = block;
+      return (
+        <div className="flex items-start gap-2 mb-1">
+          <div className="text-xs font-semibold text-gray-600 w-28 shrink-0 mt-px">
+            {data.label || ''}
+          </div>
+          <span className="text-xs text-gray-400 shrink-0 mt-px">:</span>
+          <div className="text-xs text-gray-700">{(data.skills || []).join(', ')}</div>
+        </div>
+      );
+    }
+    case BLOCK_TYPES.SPACER:
+      return (
+        <div
+          className="w-full"
+          style={{ height: block.data.size === 'lg' ? 20 : block.data.size === 'md' ? 12 : 8 }}
+        />
+      );
+    case BLOCK_TYPES.SECTION_TITLE:
+      return (
+        <div className={cn(PAGE_STYLES.sectionTitle, 'uppercase mt-1')}>
+          {block.data.title || 'SECTION'}
+        </div>
+      );
+    case BLOCK_TYPES.CL_DATE:
+      return <div className="text-sm mb-1">{block.data.date || ''}</div>;
+    case BLOCK_TYPES.CL_RECIPIENT: {
+      const { data } = block;
+      return (
+        <div className="mb-2">
+          {['name', 'company', 'address'].map((f) => (
+            <div key={f} className="text-sm">
+              {data[f] || ''}
+            </div>
+          ))}
+        </div>
+      );
+    }
+    case BLOCK_TYPES.CL_SALUTATION:
+      return <div className="text-sm mb-2">{block.data.text || ''}</div>;
+    case BLOCK_TYPES.CL_CLOSING:
+      return (
+        <div className="mt-4">
+          <div className="text-sm">{block.data.text || ''}</div>
+          <div className="text-sm font-semibold mt-6">{block.data.name || ''}</div>
+        </div>
+      );
+    default:
+      return null;
+  }
+}
+
 // ─── Block router ─────────────────────────────────────────────────────────
 
 function BlockRenderer({ block, onChange, jobId }) {
@@ -869,7 +988,7 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
       >
         {blocks.map((block) => (
           <div key={block.id} data-mb={block.id}>
-            <BlockRenderer block={block} onChange={() => {}} jobId={null} />
+            <MeasureBlockRenderer block={block} />
           </div>
         ))}
       </div>

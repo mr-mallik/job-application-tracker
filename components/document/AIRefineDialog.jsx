@@ -65,6 +65,7 @@ export default function AIRefineDialog({ documentType, blocks, jobId, onApply })
       const token = localStorage.getItem('token');
       const userData = localStorage.getItem('user');
       const userProfile = userData ? JSON.parse(userData).profile : null;
+      console.log('User profile sent to AI:', userProfile);
 
       // Serialize current blocks to markdown for context
       const { blocksToPreview } = await import('@/lib/blockSchema');

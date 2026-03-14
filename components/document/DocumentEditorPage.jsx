@@ -203,10 +203,14 @@ export default function DocumentEditorPage({ documentId }) {
         e.preventDefault();
         handleRedo();
       }
+      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+        e.preventDefault();
+        saveNow(blocks, title, template);
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleUndo, handleRedo]);
+  }, [handleUndo, handleRedo, saveNow, blocks, title, template]);
 
   const handleBlocksChange = (newBlocks) => {
     pushHistory(blocks);

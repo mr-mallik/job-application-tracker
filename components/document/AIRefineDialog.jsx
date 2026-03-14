@@ -17,6 +17,7 @@ import { Sparkles, RefreshCw } from 'lucide-react';
 
 export default function AIRefineDialog({ documentType, blocks, jobId, onApply }) {
   const [open, setOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [jobDescription, setJobDescription] = useState('');
   const [preferences, setPreferences] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -47,12 +48,17 @@ export default function AIRefineDialog({ documentType, blocks, jobId, onApply })
     }
   };
 
-  const handleGenerate = async () => {
+  const handleGenerateClick = () => {
     if (!jobDescription.trim()) {
       setError('Please paste a job description.');
       return;
     }
     setError('');
+    setConfirmOpen(true);
+  };
+
+  const handleGenerate = async () => {
+    setConfirmOpen(false);
     setGenerating(true);
 
     try {
@@ -156,7 +162,11 @@ export default function AIRefineDialog({ documentType, blocks, jobId, onApply })
           <Button variant="outline" onClick={() => setOpen(false)} disabled={generating}>
             Cancel
           </Button>
-          <Button onClick={handleGenerate} disabled={generating || loadingJob} className="gap-2">
+          <Button
+            onClick={handleGenerateClick}
+            disabled={generating || loadingJob}
+            className="gap-2"
+          >
             {generating ? (
               <RefreshCw className="w-3.5 h-3.5 animate-spin" />
             ) : (
@@ -166,6 +176,57 @@ export default function AIRefineDialog({ documentType, blocks, jobId, onApply })
           </Button>
         </DialogFooter>
       </DialogContent>
+
+      {/* Confirmation Dialog */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Overwrite Current Content?</DialogTitle>
+            <DialogDescription className="pt-2 space-y-2">
+              <p className="font-semibold text-destructive">
+                ⚠️ All current changes will be lost and overwritten.
+              </p>
+              <p>
+                The AI will generate new content based on the job description. Your existing
+                document content will be completely replaced.
+              </p>
+              <p className="text-sm">
+                This action cannot be undone. Make sure you&apos;ve saved any content you want to
+                keep.
+              </p>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setConfirmOpen(false)}
+              disabled={generating}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleGenerate}
+              disabled={generating}
+              className="gap-2"
+            >
+              {generating ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  Generating…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Proceed & Generate
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

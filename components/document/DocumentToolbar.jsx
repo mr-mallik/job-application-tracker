@@ -99,7 +99,7 @@ export default function DocumentToolbar({
         <Input
           value={title}
           onChange={(e) => onTitleChange(e.target.value)}
-          className="h-8 max-w-xs text-sm font-medium border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 px-1"
+          className="h-8 text-sm font-medium border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 px-1"
           placeholder="Document title…"
         />
 

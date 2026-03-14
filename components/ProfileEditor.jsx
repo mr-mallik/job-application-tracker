@@ -173,7 +173,29 @@ export function ProfileEditor({ user, token, onSave, onCancel }) {
         if (!dateStr || dateStr.toLowerCase() === 'present') return new Date();
         const parts = dateStr.split('/');
         if (parts.length === 2) {
-          return new Date(parseInt(parts[1]), parseInt(parts[0]) - 1);
+          const monthPart = parts[0].trim();
+          const year = parseInt(parts[1]);
+          const numericMonth = parseInt(monthPart);
+          if (!isNaN(numericMonth)) {
+            return new Date(year, numericMonth - 1);
+          } else {
+            const monthMap = {
+              jan: 0,
+              feb: 1,
+              mar: 2,
+              apr: 3,
+              may: 4,
+              jun: 5,
+              jul: 6,
+              aug: 7,
+              sep: 8,
+              oct: 9,
+              nov: 10,
+              dec: 11,
+            };
+            const month = monthMap[monthPart.toLowerCase().substring(0, 3)];
+            return month !== undefined ? new Date(year, month) : new Date(0);
+          }
         }
         return new Date(0);
       };
@@ -211,7 +233,29 @@ export function ProfileEditor({ user, token, onSave, onCancel }) {
         if (!dateStr || dateStr.toLowerCase() === 'present') return new Date();
         const parts = dateStr.split('/');
         if (parts.length === 2) {
-          return new Date(parseInt(parts[1]), parseInt(parts[0]) - 1);
+          const monthPart = parts[0].trim();
+          const year = parseInt(parts[1]);
+          const numericMonth = parseInt(monthPart);
+          if (!isNaN(numericMonth)) {
+            return new Date(year, numericMonth - 1);
+          } else {
+            const monthMap = {
+              jan: 0,
+              feb: 1,
+              mar: 2,
+              apr: 3,
+              may: 4,
+              jun: 5,
+              jul: 6,
+              aug: 7,
+              sep: 8,
+              oct: 9,
+              nov: 10,
+              dec: 11,
+            };
+            const month = monthMap[monthPart.toLowerCase().substring(0, 3)];
+            return month !== undefined ? new Date(year, month) : new Date(0);
+          }
         }
         return new Date(0);
       };

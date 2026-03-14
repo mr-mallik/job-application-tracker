@@ -331,14 +331,31 @@ function SkillGroupBlock({ block, onChange }) {
   const { data } = block;
   const update = (partial) => onChange({ ...block, data: { ...data, ...partial } });
   const skillsStr = (data.skills || []).join(', ');
+  const labelRef = useRef(null);
+  const [labelWidth, setLabelWidth] = useState(112); // w-28 = 7rem = 112px
+
+  useEffect(() => {
+    if (!labelRef.current) return;
+    // Create temporary span to measure text width
+    const span = document.createElement('span');
+    span.style.cssText =
+      'position:absolute;visibility:hidden;white-space:pre;font-size:0.75rem;font-weight:600;';
+    span.textContent = data.label || 'Category';
+    document.body.appendChild(span);
+    const width = Math.max(span.offsetWidth + 30, 60); // +30px padding, min 60px
+    document.body.removeChild(span);
+    setLabelWidth(width);
+  }, [data.label]);
 
   return (
     <div className="flex items-start gap-2 mb-1">
       <Input
+        ref={labelRef}
         value={data.label || ''}
         onChange={(e) => update({ label: e.target.value })}
         placeholder="Category"
-        className="border-0 bg-transparent text-xs font-semibold text-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 w-28 p-0 shrink-0 mt-px"
+        className="border-0 bg-transparent text-xs font-semibold text-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 p-0 shrink-0 mt-px"
+        style={{ width: `${labelWidth}px` }}
       />
       <span className="text-xs text-gray-400 shrink-0 mt-px">:</span>
       <AutoResizeTextarea

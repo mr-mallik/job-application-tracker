@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
+import RichTextEditor from '@/components/document/RichTextEditor';
+import { ensureSlate, slateToText, slateFromText } from '@/lib/slateUtils';
 import {
   User,
   Mail,
@@ -19,6 +21,7 @@ import {
   Upload,
   RefreshCw,
   Save,
+  Award,
 } from 'lucide-react';
 
 export default function BasicInformationPage() {
@@ -32,6 +35,7 @@ export default function BasicInformationPage() {
     portfolio: '',
     summary: '',
   });
+  const [achievements, setAchievements] = useState(slateFromText(''));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -61,6 +65,9 @@ export default function BasicInformationPage() {
           portfolio: data.user.profile?.portfolio || '',
           summary: data.user.profile?.summary || '',
         });
+        // Load achievements as Slate value
+        const achievementsText = data.user.profile?.achievements || '';
+        setAchievements(slateFromText(achievementsText));
       }
     } catch (error) {
       console.error('Failed to load profile:', error);
@@ -89,6 +96,7 @@ export default function BasicInformationPage() {
             linkedin: profile.linkedin,
             portfolio: profile.portfolio,
             summary: profile.summary,
+            achievements: slateToText(achievements),
           },
         }),
       });
@@ -151,6 +159,11 @@ export default function BasicInformationPage() {
             portfolio: parsed.portfolio || prev.portfolio,
             summary: parsed.summary || prev.summary,
           }));
+
+          // Update achievements if parsed
+          if (parsed.achievements) {
+            setAchievements(slateFromText(parsed.achievements));
+          }
 
           toast({
             title: 'Success',
@@ -389,6 +402,37 @@ export default function BasicInformationPage() {
               looking for
             </p>
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Achievements & Awards */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+              <Award className="w-4 h-4 text-primary" />
+            </div>
+            Achievements & Awards
+          </CardTitle>
+          <CardDescription>
+            Notable accomplishments, certifications, publications, and recognition
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-2">
+          <Label htmlFor="achievements">Achievements</Label>
+          <div className="border rounded-md p-3 bg-background min-h-[200px]">
+            <RichTextEditor
+              value={achievements}
+              onChange={setAchievements}
+              placeholder="• AWS Certified Solutions Architect - Professional (2024)\n• Published author: 'Modern Web Development' - O'Reilly Media\n• Winner of Best Innovation Award at TechCon 2023\n• Speaker at React Summit, JSConf, and Node.js Interactive\n\nUse bullet points or formatted text to list your achievements, awards, certifications, publications, speaking engagements, or other notable accomplishments."
+              className="min-h-[180px]"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            List your professional achievements, certifications, awards, publications, conference
+            talks, or other career highlights. Use the formatting toolbar for bold, italic, links,
+            and bullet points.
+          </p>
         </CardContent>
       </Card>
 

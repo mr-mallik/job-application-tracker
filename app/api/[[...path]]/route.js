@@ -17,7 +17,8 @@ import { scrapeWithPlaywright, parseWithCheerio, detectJobBoard } from '@/lib/sc
 import {
   classifyJobData,
   refineDocumentToBlocks,
-  analyzeKeywords,
+  extractKeywordsFromJob,
+  checkKeywordPresence,
   generateInterviewQuestions,
 } from '@/lib/gemini';
 import { validateBlockArray } from '@/lib/blockSchema';
@@ -43,16 +44,43 @@ function handleCORS(response) {
   return response;
 }
 
-// Helper function to parse dates (mm/yyyy format)
+// Helper function to parse dates (MMM/yyyy format like "Sep/2024")
 function parseDate(dateString) {
   if (!dateString || dateString.toLowerCase() === 'present') {
     return new Date(); // Current date for "Present"
   }
   const parts = dateString.split('/');
   if (parts.length === 2) {
-    const month = parseInt(parts[0]) - 1;
+    // Handle both "MMM/yyyy" (e.g., "Sep/2024") and "mm/yyyy" (e.g., "09/2024") formats
+    const monthPart = parts[0].trim();
     const year = parseInt(parts[1]);
-    return new Date(year, month);
+
+    // Check if month is numeric or text
+    const numericMonth = parseInt(monthPart);
+    if (!isNaN(numericMonth)) {
+      // Numeric format: "09/2024"
+      return new Date(year, numericMonth - 1);
+    } else {
+      // Text format: "Sep/2024"
+      const monthMap = {
+        jan: 0,
+        feb: 1,
+        mar: 2,
+        apr: 3,
+        may: 4,
+        jun: 5,
+        jul: 6,
+        aug: 7,
+        sep: 8,
+        oct: 9,
+        nov: 10,
+        dec: 11,
+      };
+      const month = monthMap[monthPart.toLowerCase().substring(0, 3)];
+      if (month !== undefined) {
+        return new Date(year, month);
+      }
+    }
   }
   return new Date(0); // Default to epoch if invalid
 }
@@ -916,14 +944,12 @@ async function handleRoute(request, { params }) {
       }
     }
 
-    // Keyword analysis — reads cache from job doc, refreshes on demand
+    // Keyword analysis — AI extracts keywords once, then local checking for presence
     if (route === '/documents/analyze-keywords' && method === 'POST') {
       const user = await getAuthUser(request);
       if (!user) {
         return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
       }
-      const aiDenied = requireAIAccess(user);
-      if (aiDenied) return aiDenied;
 
       const body = await request.json();
       const { jobId, resumeText, force = false } = body;
@@ -939,11 +965,6 @@ async function handleRoute(request, { params }) {
         return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }));
       }
 
-      // Return cached result unless force-refresh requested
-      if (!force && job.keywordAnalysis) {
-        return handleCORS(NextResponse.json({ analysis: job.keywordAnalysis, cached: true }));
-      }
-
       const jobDescription = [job.description, job.requirements].filter(Boolean).join('\n\n');
       if (!jobDescription.trim()) {
         return handleCORS(
@@ -955,13 +976,28 @@ async function handleRoute(request, { params }) {
       }
 
       try {
-        const analysis = await analyzeKeywords(resumeText, jobDescription);
-        analysis.analysedAt = new Date().toISOString();
-        analysis.keywordsPresent = analysis.keywords.filter((k) => k.present).map((k) => k.keyword);
-        analysis.keywordsMissing = analysis.keywords
-          .filter((k) => !k.present)
-          .map((k) => k.keyword);
+        let baseKeywords = null;
+        let usedAI = false;
 
+        // Check if we already have extracted keywords (from previous analysis)
+        if (!force && job.keywordAnalysis?.keywords?.length > 0) {
+          // Reuse existing keywords, just re-check presence (no AI needed)
+          baseKeywords = job.keywordAnalysis.keywords.map((k) => ({ keyword: k.keyword }));
+        } else {
+          // First time or force refresh - use AI to extract keywords from job description
+          const aiDenied = requireAIAccess(user);
+          if (aiDenied) return aiDenied;
+
+          const extracted = await extractKeywordsFromJob(jobDescription);
+          baseKeywords = extracted.keywords;
+          usedAI = true;
+        }
+
+        // Programmatically check keyword presence (no AI)
+        const analysis = checkKeywordPresence(baseKeywords, resumeText);
+        analysis.analysedAt = new Date().toISOString();
+
+        // Save to database
         await db
           .collection('jobs')
           .updateOne(
@@ -969,7 +1005,13 @@ async function handleRoute(request, { params }) {
             { $set: { keywordAnalysis: analysis, updatedAt: new Date() } }
           );
 
-        return handleCORS(NextResponse.json({ analysis, cached: false }));
+        return handleCORS(
+          NextResponse.json({
+            analysis,
+            cached: !usedAI,
+            usedAI,
+          })
+        );
       } catch (error) {
         console.error('Keyword analysis error:', error);
         return handleCORS(NextResponse.json({ error: 'Keyword analysis failed' }, { status: 500 }));

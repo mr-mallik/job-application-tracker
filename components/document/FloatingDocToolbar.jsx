@@ -75,28 +75,34 @@ function KeywordPanel({ jobId, resumeText }) {
     [jobId, resumeText]
   );
 
-  // Client-side keyword presence re-check whenever resume text changes
-  // No AI involved — just string matching + debounced DB save
+  // Real-time keyword presence checking with instant UI feedback
+  // Updates UI immediately, debounces DB save to prevent server spam
   useEffect(() => {
     if (!analysisRef.current?.keywords?.length || !jobId) return;
+
+    // Immediate UI update (no delay for responsiveness)
+    const textLower = resumeText.toLowerCase();
+    const updated = analysisRef.current.keywords.map((kw) => ({
+      ...kw,
+      present: textLower.includes(kw.keyword.toLowerCase()),
+    }));
+    const presentCount = updated.filter((k) => k.present).length;
+    const newScore = Math.round((presentCount / updated.length) * 100);
+    const updatedAnalysis = {
+      ...analysisRef.current,
+      keywords: updated,
+      keywordsPresent: updated.filter((k) => k.present).map((k) => k.keyword),
+      keywordsMissing: updated.filter((k) => !k.present).map((k) => k.keyword),
+      score: newScore,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Update UI instantly for responsive feedback
+    setAnalysis(updatedAnalysis);
+
+    // Debounce DB save to prevent server overload
     if (syncTimerRef.current) clearTimeout(syncTimerRef.current);
     syncTimerRef.current = setTimeout(() => {
-      const textLower = resumeText.toLowerCase();
-      const updated = analysisRef.current.keywords.map((kw) => ({
-        ...kw,
-        present: textLower.includes(kw.keyword.toLowerCase()),
-      }));
-      const presentCount = updated.filter((k) => k.present).length;
-      const newScore = Math.round((presentCount / updated.length) * 100);
-      const updatedAnalysis = {
-        ...analysisRef.current,
-        keywords: updated,
-        keywordsPresent: updated.filter((k) => k.present).map((k) => k.keyword),
-        keywordsMissing: updated.filter((k) => !k.present).map((k) => k.keyword),
-        score: newScore,
-        updatedAt: new Date().toISOString(),
-      };
-      setAnalysis(updatedAnalysis);
       setSyncing(true);
       const token = localStorage.getItem('token');
       fetch('/api/documents/update-keyword-presence', {
@@ -107,6 +113,7 @@ function KeywordPanel({ jobId, resumeText }) {
         .catch(() => {})
         .finally(() => setSyncing(false));
     }, 1500);
+
     return () => clearTimeout(syncTimerRef.current);
   }, [resumeText, jobId]); // eslint-disable-line react-hooks/exhaustive-deps
 

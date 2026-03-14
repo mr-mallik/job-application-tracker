@@ -42,7 +42,7 @@ export default function DocumentEditorPage({ documentId }) {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
-  const [showPreview, setShowPreview] = useState(false);
+  const [showPreview, setShowPreview] = useState(true);
   const [previewBlocks, setPreviewBlocks] = useState([]);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -234,7 +234,17 @@ export default function DocumentEditorPage({ documentId }) {
 
   const handleFetchFromProfile = () => {
     const userData = localStorage.getItem('user');
+    console.log('Fetched user data from localStorage for profile population:', userData);
     const profile = userData ? JSON.parse(userData).profile : null;
+    // Add .name to profile for personalized greetings in templates
+    if (profile && !profile.name && JSON.parse(userData).name) {
+      profile.name = JSON.parse(userData).name;
+    }
+    // for email
+    if (profile && !profile.email && JSON.parse(userData).email) {
+      profile.email = JSON.parse(userData).email;
+    }
+    console.log('Fetched profile for document population:', profile);
     const newBlocks = getStarterBlocks('resume', profile);
     handleBlocksChange(newBlocks);
     toast({

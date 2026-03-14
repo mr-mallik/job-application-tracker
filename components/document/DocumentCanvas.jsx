@@ -30,7 +30,7 @@ import RichTextEditor from './RichTextEditor';
 
 // A4 at 96 dpi in pixels
 const A4_WIDTH = 794;
-const A4_MIN_HEIGHT = 1123;
+const A4_MIN_HEIGHT = 960;
 const A4_PADDING_V = 40; // top + bottom padding (px)
 const A4_USABLE_HEIGHT = A4_MIN_HEIGHT - A4_PADDING_V * 2; // content area per page
 const PAGE_GAP = 32; // grey gap between pages (px)

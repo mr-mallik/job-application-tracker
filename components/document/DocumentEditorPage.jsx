@@ -59,6 +59,9 @@ export default function DocumentEditorPage({ documentId }) {
   // AI refine state
   const [isRefining, setIsRefining] = useState(false);
 
+  // Drag mode state
+  const [isDragMode, setIsDragMode] = useState(false);
+
   // Ref to DocumentCanvas imperative API
   const canvasRef = useRef(null);
 
@@ -379,6 +382,12 @@ export default function DocumentEditorPage({ documentId }) {
     [selectedBlockId, isRefining, blocks, doc, toast]
   );
 
+  // ── Toggle drag mode ──────────────────────────────────────────────────────
+  const handleToggleDragMode = useCallback(() => {
+    canvasRef.current?.toggleDragMode();
+    setIsDragMode(canvasRef.current?.isDragMode ?? false);
+  }, []);
+
   // ── Render ────────────────────────────────────────────────────────────────
   if (loading) {
     return (
@@ -437,6 +446,8 @@ export default function DocumentEditorPage({ documentId }) {
             isRefining={isRefining}
             jobId={doc?.jobId || null}
             resumeText={documentType === 'resume' ? blocksToPreview(blocks, 8000) : ''}
+            isDragMode={isDragMode}
+            onToggleDragMode={handleToggleDragMode}
           />
 
           {/* Scrollable A4 canvas area */}

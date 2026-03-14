@@ -27,6 +27,7 @@ import {
   Contact,
   Target,
   RefreshCw,
+  GripVertical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -297,7 +298,13 @@ const ALL_BLOCK_OPTIONS = [
   { type: BLOCK_TYPES.SUBHEADING, label: 'Subheading', icon: Type, resumeOnly: false },
   { type: BLOCK_TYPES.SKILL_GROUP, label: 'Skill Group', icon: Layers, resumeOnly: true },
   { type: BLOCK_TYPES.SPACER, label: 'Spacer', icon: Minus, resumeOnly: false },
-  { type: BLOCK_TYPES.SECTION_TITLE, label: 'Section', icon: LayoutTemplate, resumeOnly: true },
+  {
+    type: BLOCK_TYPES.SECTION_TITLE,
+    label: 'Section Header',
+    icon: LayoutTemplate,
+    resumeOnly: true,
+  },
+  { type: 'section-with-content', label: 'Section (with content)', icon: Target, resumeOnly: true },
 ];
 
 // ─── Tooltip wrapper ────────────────────────────────────────────────────────
@@ -341,6 +348,8 @@ function Divider() {
  *   isRefining         bool
  *   jobId              string | null
  *   resumeText         string
+ *   isDragMode         bool
+ *   onToggleDragMode   () => void
  */
 export default function FloatingDocToolbar({
   selectedBlock,
@@ -359,6 +368,8 @@ export default function FloatingDocToolbar({
   isRefining,
   jobId,
   resumeText,
+  isDragMode,
+  onToggleDragMode,
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [refineOpen, setRefineOpen] = useState(false);
@@ -400,47 +411,68 @@ export default function FloatingDocToolbar({
 
       <Divider />
 
+      {/* ── Drag mode toggle ────────────────────────────────────────────── */}
+      <Tip
+        label={isDragMode ? 'Exit drag mode (enable editing)' : 'Enter drag mode (reorder blocks)'}
+      >
+        <Button
+          variant={isDragMode ? 'default' : 'ghost'}
+          size="icon"
+          className={cn(
+            'h-10 w-10 shrink-0',
+            isDragMode && 'bg-primary text-primary-foreground hover:bg-primary/90'
+          )}
+          onClick={onToggleDragMode}
+        >
+          <GripVertical className="w-5 h-5" />
+        </Button>
+      </Tip>
+
+      <Divider />
+
       {/* ── Keyword coverage ────────────────────────────────────────────── */}
       {isResume && <KeywordPanel jobId={jobId} resumeText={resumeText} />}
 
       {/* ── Add block ───────────────────────────────────────────────────── */}
-      <Popover open={addOpen} onOpenChange={setAddOpen}>
-        <Tip label={hasSelection ? 'Add block after selected' : 'Add block at end'}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-10 w-10 shrink-0 text-primary hover:text-primary"
-            >
-              <Plus className="w-5 h-5" />
-            </Button>
-          </PopoverTrigger>
-        </Tip>
-        <PopoverContent side="right" align="start" className="p-2 w-52">
-          <p className="text-xs font-medium text-muted-foreground mb-2 px-1">
-            {hasSelection ? 'Insert after selected block' : 'Append to document'}
-          </p>
-          <div className="flex flex-col gap-0.5">
-            {blockOptions.map((opt) => (
-              <button
-                key={opt.type}
-                type="button"
-                onClick={() => {
-                  onAddBlock(opt.type);
-                  setAddOpen(false);
-                }}
-                className="flex items-center gap-2.5 px-2.5 py-2 text-sm rounded hover:bg-muted text-left w-full transition-colors"
+      {!isDragMode && (
+        <Popover open={addOpen} onOpenChange={setAddOpen}>
+          <Tip label={hasSelection ? 'Add block after selected' : 'Add block at end'}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-10 w-10 shrink-0 text-primary hover:text-primary"
               >
-                <opt.icon className="w-4 h-4 shrink-0 text-muted-foreground" />
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        </PopoverContent>
-      </Popover>
+                <Plus className="w-5 h-5" />
+              </Button>
+            </PopoverTrigger>
+          </Tip>
+          <PopoverContent side="right" align="start" className="p-2 w-52">
+            <p className="text-xs font-medium text-muted-foreground mb-2 px-1">
+              {hasSelection ? 'Insert after selected block' : 'Append to document'}
+            </p>
+            <div className="flex flex-col gap-0.5">
+              {blockOptions.map((opt) => (
+                <button
+                  key={opt.type}
+                  type="button"
+                  onClick={() => {
+                    onAddBlock(opt.type);
+                    setAddOpen(false);
+                  }}
+                  className="flex items-center gap-2.5 px-2.5 py-2 text-sm rounded hover:bg-muted text-left w-full transition-colors"
+                >
+                  <opt.icon className="w-4 h-4 shrink-0 text-muted-foreground" />
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+      )}
 
       {/* ── Selected-block controls ──────────────────────────────────────── */}
-      {hasSelection && (
+      {hasSelection && !isDragMode && (
         <>
           <Divider />
 

@@ -269,6 +269,7 @@ export default function RichTextEditor({
   onFocus,
   onBlur,
   style,
+  readOnly = false,
 }) {
   const editor = useMemo(() => withLists(withLinks(withHistory(withReact(createEditor())))), []);
 
@@ -363,7 +364,7 @@ export default function RichTextEditor({
     >
       <Slate editor={editor} initialValue={safeValue} onChange={onChange}>
         {/* Toolbar — shown while focused or while the link URL input is open */}
-        {(focused || linkInputOpen) && (
+        {!readOnly && (focused || linkInputOpen) && (
           <div className="border-b bg-muted/60 rounded-t">
             {/* Button row */}
             <div className="flex items-center gap-0.5 px-1 py-0.5">
@@ -471,8 +472,10 @@ export default function RichTextEditor({
           renderElement={renderElement}
           placeholder={placeholder}
           onKeyDown={handleKeyDown}
+          readOnly={readOnly}
           className={cn(
             'outline-none px-1 py-0.5 min-h-[1.4em] text-sm leading-relaxed',
+            readOnly && 'cursor-move',
             className
           )}
           onFocus={() => {

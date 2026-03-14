@@ -11,8 +11,23 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import { Link2, X, PlusCircle, Pencil, ExternalLink } from 'lucide-react';
-import { arrayMove } from '@dnd-kit/sortable';
+import { Link2, X, PlusCircle, Pencil, ExternalLink, GripVertical } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   BLOCK_TYPES,
   createTextBlock,
@@ -166,7 +181,7 @@ function LinksEditorDialog({ links, open, onOpenChange, onSave }) {
 
 // ─── DocHeader block renderer ─────────────────────────────────────────────
 
-function DocHeaderBlock({ block, onChange }) {
+function DocHeaderBlock({ block, onChange, isDragMode }) {
   const { data } = block;
   const links = data.links || [];
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -179,9 +194,11 @@ function DocHeaderBlock({ block, onChange }) {
         value={data.name || ''}
         onChange={(e) => update({ name: e.target.value })}
         placeholder="Full Name"
+        disabled={isDragMode}
         className={cn(
           PAGE_STYLES.name,
-          'border-0 bg-transparent text-center focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5'
+          'border-0 bg-transparent text-center focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5',
+          isDragMode && 'cursor-move'
         )}
         style={{ fontSize: '1.4rem' }}
       />
@@ -189,7 +206,11 @@ function DocHeaderBlock({ block, onChange }) {
         value={data.designation || ''}
         onChange={(e) => update({ designation: e.target.value })}
         placeholder="Job Title / Headline"
-        className="border-0 bg-transparent text-center text-sm text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5"
+        disabled={isDragMode}
+        className={cn(
+          'border-0 bg-transparent text-center text-sm text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5',
+          isDragMode && 'cursor-move'
+        )}
       />
 
       {/* Contact links — compact chip row */}
@@ -211,18 +232,20 @@ function DocHeaderBlock({ block, onChange }) {
         ) : (
           <span className="text-xs text-gray-300 italic">No contact links</span>
         )}
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            setDialogOpen(true);
-          }}
-          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors px-1.5 py-0.5 rounded hover:bg-muted"
-          title="Edit links"
-        >
-          <Pencil className="w-3 h-3" />
-          Edit links
-        </button>
+        {!isDragMode && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDialogOpen(true);
+            }}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary transition-colors px-1.5 py-0.5 rounded hover:bg-muted"
+            title="Edit links"
+          >
+            <Pencil className="w-3 h-3" />
+            Edit links
+          </button>
+        )}
       </div>
 
       <LinksEditorDialog
@@ -237,7 +260,7 @@ function DocHeaderBlock({ block, onChange }) {
 
 // ─── CL Header block ──────────────────────────────────────────────────────
 
-function ClHeaderBlock({ block, onChange }) {
+function ClHeaderBlock({ block, onChange, isDragMode }) {
   const { data } = block;
   const update = (partial) => onChange({ ...block, data: { ...data, ...partial } });
 
@@ -247,7 +270,11 @@ function ClHeaderBlock({ block, onChange }) {
         value={data.name || ''}
         onChange={(e) => update({ name: e.target.value })}
         placeholder="Your Full Name"
-        className="border-0 bg-transparent font-semibold text-base focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5"
+        disabled={isDragMode}
+        className={cn(
+          'border-0 bg-transparent font-semibold text-base focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5',
+          isDragMode && 'cursor-move'
+        )}
       />
       {['email', 'phone', 'location'].map((field) => (
         <Input
@@ -255,7 +282,11 @@ function ClHeaderBlock({ block, onChange }) {
           value={data[field] || ''}
           onChange={(e) => update({ [field]: e.target.value })}
           placeholder={field.charAt(0).toUpperCase() + field.slice(1)}
-          className="border-0 bg-transparent text-xs text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5"
+          disabled={isDragMode}
+          className={cn(
+            'border-0 bg-transparent text-xs text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5',
+            isDragMode && 'cursor-move'
+          )}
         />
       ))}
     </div>
@@ -264,7 +295,7 @@ function ClHeaderBlock({ block, onChange }) {
 
 // ─── Subheading block ─────────────────────────────────────────────────────
 
-function SubheadingBlock({ block, onChange }) {
+function SubheadingBlock({ block, onChange, isDragMode }) {
   const { data } = block;
   const update = (partial) => onChange({ ...block, data: { ...data, ...partial } });
 
@@ -275,13 +306,21 @@ function SubheadingBlock({ block, onChange }) {
           value={data.primary || ''}
           onChange={(e) => update({ primary: e.target.value })}
           placeholder="Role / Organisation"
-          className="border-0 bg-transparent font-semibold text-[0.85rem] focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 flex-1 p-0"
+          disabled={isDragMode}
+          className={cn(
+            'border-0 bg-transparent font-semibold text-[0.85rem] focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 flex-1 p-0',
+            isDragMode && 'cursor-move'
+          )}
         />
         <Input
           value={data.dateRange || ''}
           onChange={(e) => update({ dateRange: e.target.value })}
           placeholder="Date range"
-          className="border-0 bg-transparent text-xs text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 w-50 text-right p-0"
+          disabled={isDragMode}
+          className={cn(
+            'border-0 bg-transparent text-xs text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 w-50 text-right p-0',
+            isDragMode && 'cursor-move'
+          )}
         />
       </div>
       <div className="flex items-center gap-2">
@@ -289,13 +328,21 @@ function SubheadingBlock({ block, onChange }) {
           value={data.secondary || ''}
           onChange={(e) => update({ secondary: e.target.value })}
           placeholder="Department / Course"
-          className="border-0 bg-transparent text-xs text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 flex-1 p-0"
+          disabled={isDragMode}
+          className={cn(
+            'border-0 bg-transparent text-xs text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 flex-1 p-0',
+            isDragMode && 'cursor-move'
+          )}
         />
         <Input
           value={data.location || ''}
           onChange={(e) => update({ location: e.target.value })}
           placeholder="Location"
-          className="border-0 bg-transparent text-xs text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 w-50 text-right p-0"
+          disabled={isDragMode}
+          className={cn(
+            'border-0 bg-transparent text-xs text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 w-50 text-right p-0',
+            isDragMode && 'cursor-move'
+          )}
         />
       </div>
     </div>
@@ -304,7 +351,7 @@ function SubheadingBlock({ block, onChange }) {
 
 // ─── SkillGroup block ─────────────────────────────────────────────────────
 
-function AutoResizeTextarea({ value, onChange, placeholder, className }) {
+function AutoResizeTextarea({ value, onChange, placeholder, className, disabled }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -321,13 +368,14 @@ function AutoResizeTextarea({ value, onChange, placeholder, className }) {
       rows={1}
       onChange={onChange}
       placeholder={placeholder}
+      disabled={disabled}
       className={className}
       style={{ overflow: 'hidden', resize: 'none' }}
     />
   );
 }
 
-function SkillGroupBlock({ block, onChange }) {
+function SkillGroupBlock({ block, onChange, isDragMode }) {
   const { data } = block;
   const update = (partial) => onChange({ ...block, data: { ...data, ...partial } });
   const skillsStr = (data.skills || []).join(', ');
@@ -354,7 +402,11 @@ function SkillGroupBlock({ block, onChange }) {
         value={data.label || ''}
         onChange={(e) => update({ label: e.target.value })}
         placeholder="Category"
-        className="border-0 bg-transparent text-xs font-semibold text-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 p-0 shrink-0 mt-px"
+        disabled={isDragMode}
+        className={cn(
+          'border-0 bg-transparent text-xs font-semibold text-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 p-0 shrink-0 mt-px',
+          isDragMode && 'cursor-move'
+        )}
         style={{ width: `${labelWidth}px` }}
       />
       <span className="text-xs text-gray-400 shrink-0 mt-px">:</span>
@@ -369,7 +421,11 @@ function SkillGroupBlock({ block, onChange }) {
           })
         }
         placeholder="Skill 1, Skill 2, Skill 3"
-        className="border-0 bg-transparent text-xs text-gray-700 outline-none w-full p-0 leading-relaxed"
+        disabled={isDragMode}
+        className={cn(
+          'border-0 bg-transparent text-xs text-gray-700 outline-none w-full p-0 leading-relaxed',
+          isDragMode && 'cursor-move'
+        )}
       />
     </div>
   );
@@ -377,7 +433,7 @@ function SkillGroupBlock({ block, onChange }) {
 
 // ─── Letter detail blocks (Date, Recipient, Salutation, Closing) ──────────
 
-function SimpleTextBlock({ block, onChange, placeholder, className: cls }) {
+function SimpleTextBlock({ block, onChange, placeholder, className: cls, isDragMode }) {
   const { data } = block;
   const update = (partial) => onChange({ ...block, data: { ...data, ...partial } });
 
@@ -388,15 +444,17 @@ function SimpleTextBlock({ block, onChange, placeholder, className: cls }) {
         update(data.date !== undefined ? { date: e.target.value } : { text: e.target.value })
       }
       placeholder={placeholder}
+      disabled={isDragMode}
       className={cn(
         'border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5 p-0',
+        isDragMode && 'cursor-move',
         cls
       )}
     />
   );
 }
 
-function ClRecipientBlock({ block, onChange }) {
+function ClRecipientBlock({ block, onChange, isDragMode }) {
   const { data } = block;
   const update = (partial) => onChange({ ...block, data: { ...data, ...partial } });
 
@@ -408,14 +466,18 @@ function ClRecipientBlock({ block, onChange }) {
           value={data[f] || ''}
           onChange={(e) => update({ [f]: e.target.value })}
           placeholder={f.charAt(0).toUpperCase() + f.slice(1)}
-          className="border-0 bg-transparent text-sm focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5 p-0"
+          disabled={isDragMode}
+          className={cn(
+            'border-0 bg-transparent text-sm focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5 p-0',
+            isDragMode && 'cursor-move'
+          )}
         />
       ))}
     </div>
   );
 }
 
-function ClClosingBlock({ block, onChange }) {
+function ClClosingBlock({ block, onChange, isDragMode }) {
   const { data } = block;
   const update = (partial) => onChange({ ...block, data: { ...data, ...partial } });
 
@@ -425,13 +487,21 @@ function ClClosingBlock({ block, onChange }) {
         value={data.text || ''}
         onChange={(e) => update({ text: e.target.value })}
         placeholder="Sincerely,"
-        className="border-0 bg-transparent text-sm focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 p-0"
+        disabled={isDragMode}
+        className={cn(
+          'border-0 bg-transparent text-sm focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 p-0',
+          isDragMode && 'cursor-move'
+        )}
       />
       <Input
         value={data.name || ''}
         onChange={(e) => update({ name: e.target.value })}
         placeholder="Your name"
-        className="border-0 bg-transparent text-sm font-semibold focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 p-0 mt-6"
+        disabled={isDragMode}
+        className={cn(
+          'border-0 bg-transparent text-sm font-semibold focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 p-0 mt-6',
+          isDragMode && 'cursor-move'
+        )}
       />
     </div>
   );
@@ -558,20 +628,21 @@ function MeasureBlockRenderer({ block }) {
 
 // ─── Block router ─────────────────────────────────────────────────────────
 
-function BlockRenderer({ block, onChange, jobId }) {
+function BlockRenderer({ block, onChange, jobId, isDragMode }) {
   const handleRichChange = useCallback(
     (newSlate) => {
+      if (isDragMode) return;
       const text = slateToText(newSlate);
       onChange({ ...block, data: { ...block.data, slateContent: newSlate, text } });
     },
-    [block, onChange]
+    [block, onChange, isDragMode]
   );
 
   switch (block.type) {
     case BLOCK_TYPES.DOC_HEADER:
-      return <DocHeaderBlock block={block} onChange={onChange} />;
+      return <DocHeaderBlock block={block} onChange={onChange} isDragMode={isDragMode} />;
     case BLOCK_TYPES.CL_HEADER:
-      return <ClHeaderBlock block={block} onChange={onChange} />;
+      return <ClHeaderBlock block={block} onChange={onChange} isDragMode={isDragMode} />;
     case BLOCK_TYPES.TEXT:
       return (
         <RichTextEditor
@@ -580,6 +651,7 @@ function BlockRenderer({ block, onChange, jobId }) {
           placeholder="Paragraph text…"
           className={PAGE_STYLES.text}
           jobId={jobId}
+          readOnly={isDragMode}
         />
       );
     case BLOCK_TYPES.BULLET:
@@ -593,13 +665,14 @@ function BlockRenderer({ block, onChange, jobId }) {
             className={PAGE_STYLES.bullet}
             jobId={jobId}
             style={{ flex: 1 }}
+            readOnly={isDragMode}
           />
         </div>
       );
     case BLOCK_TYPES.SUBHEADING:
-      return <SubheadingBlock block={block} onChange={onChange} />;
+      return <SubheadingBlock block={block} onChange={onChange} isDragMode={isDragMode} />;
     case BLOCK_TYPES.SKILL_GROUP:
-      return <SkillGroupBlock block={block} onChange={onChange} />;
+      return <SkillGroupBlock block={block} onChange={onChange} isDragMode={isDragMode} />;
     case BLOCK_TYPES.SPACER:
       return (
         <div
@@ -616,10 +689,11 @@ function BlockRenderer({ block, onChange, jobId }) {
           onChange={onChange}
           placeholder="Date"
           className="text-sm mb-1"
+          isDragMode={isDragMode}
         />
       );
     case BLOCK_TYPES.CL_RECIPIENT:
-      return <ClRecipientBlock block={block} onChange={onChange} />;
+      return <ClRecipientBlock block={block} onChange={onChange} isDragMode={isDragMode} />;
     case BLOCK_TYPES.CL_SALUTATION:
       return (
         <SimpleTextBlock
@@ -627,10 +701,11 @@ function BlockRenderer({ block, onChange, jobId }) {
           onChange={onChange}
           placeholder="Dear Hiring Manager,"
           className="text-sm mb-2"
+          isDragMode={isDragMode}
         />
       );
     case BLOCK_TYPES.CL_CLOSING:
-      return <ClClosingBlock block={block} onChange={onChange} />;
+      return <ClClosingBlock block={block} onChange={onChange} isDragMode={isDragMode} />;
     // SECTION_TITLE used by the measurement container only
     case BLOCK_TYPES.SECTION_TITLE:
       return (
@@ -693,6 +768,39 @@ function InlineAddMenu({ onAdd }) {
   );
 }
 
+// ─── Sortable Block Item ──────────────────────────────────────────────────
+
+function SortableBlockItem({ block, children, isDragMode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: block.id,
+  });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn('relative group', isDragMode && 'cursor-move hover:bg-blue-50/30 rounded-sm')}
+    >
+      {isDragMode && (
+        <div
+          {...attributes}
+          {...listeners}
+          className="absolute left-0 top-0 bottom-0 w-8 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-grab active:cursor-grabbing z-10"
+        >
+          <GripVertical className="w-4 h-4 text-muted-foreground" />
+        </div>
+      )}
+      <div className={cn(isDragMode && 'pl-8')}>{children}</div>
+    </div>
+  );
+}
+
 // ─── Flat page renderer ───────────────────────────────────────────────────
 //
 // Pure display: no inline controls. Blocks are clickable to select them.
@@ -709,6 +817,7 @@ function PageBlocks({
   selectedBlockId,
   onSelectBlock,
   sections,
+  isDragMode,
 }) {
   return (
     <>
@@ -718,49 +827,63 @@ function PageBlocks({
         // ── Section title block ────────────────────────────────────────────
         if (block.type === BLOCK_TYPES.SECTION_TITLE) {
           return (
-            <div
-              key={block.id}
-              className={cn(
-                'mt-1 rounded-sm transition-all cursor-pointer',
-                isSelected && 'ring-2 ring-blue-400 ring-offset-1'
-              )}
-              onClick={(e) => {
-                e.stopPropagation();
-                onSelectBlock(block.id);
-              }}
-            >
-              <input
-                value={block.data.title || ''}
-                onChange={(e) => onSectionTitleChange(block.id, e.target.value)}
+            <SortableBlockItem key={block.id} block={block} isDragMode={isDragMode}>
+              <div
+                className={cn(
+                  'mt-1 rounded-sm transition-all',
+                  !isDragMode && 'cursor-pointer',
+                  isSelected && !isDragMode && 'ring-2 ring-blue-400 ring-offset-1'
+                )}
                 onClick={(e) => {
+                  if (isDragMode) return;
                   e.stopPropagation();
                   onSelectBlock(block.id);
                 }}
-                placeholder="SECTION TITLE"
-                className={cn(
-                  PAGE_STYLES.sectionTitle,
-                  'w-full bg-transparent outline-none border-0 border-b border-gray-300 focus:border-primary py-0.5 transition-colors uppercase placeholder:text-gray-300'
-                )}
-              />
-            </div>
+              >
+                <input
+                  value={block.data.title || ''}
+                  onChange={(e) => onSectionTitleChange(block.id, e.target.value)}
+                  onClick={(e) => {
+                    if (isDragMode) return;
+                    e.stopPropagation();
+                    onSelectBlock(block.id);
+                  }}
+                  placeholder="SECTION TITLE"
+                  disabled={isDragMode}
+                  className={cn(
+                    PAGE_STYLES.sectionTitle,
+                    'w-full bg-transparent outline-none border-0 border-b border-gray-300 focus:border-primary py-0.5 transition-colors uppercase placeholder:text-gray-300',
+                    isDragMode && 'cursor-move pointer-events-none'
+                  )}
+                />
+              </div>
+            </SortableBlockItem>
           );
         }
 
         // ── Regular content block ──────────────────────────────────────────
         return (
-          <div
-            key={block.id}
-            className={cn(
-              'rounded-sm transition-all cursor-pointer',
-              isSelected && 'ring-2 ring-blue-400 ring-offset-1'
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              onSelectBlock(block.id);
-            }}
-          >
-            <BlockRenderer block={block} onChange={onBlockUpdate} jobId={jobId} />
-          </div>
+          <SortableBlockItem key={block.id} block={block} isDragMode={isDragMode}>
+            <div
+              className={cn(
+                'rounded-sm transition-all',
+                !isDragMode && 'cursor-pointer',
+                isSelected && !isDragMode && 'ring-2 ring-blue-400 ring-offset-1'
+              )}
+              onClick={(e) => {
+                if (isDragMode) return;
+                e.stopPropagation();
+                onSelectBlock(block.id);
+              }}
+            >
+              <BlockRenderer
+                block={block}
+                onChange={onBlockUpdate}
+                jobId={jobId}
+                isDragMode={isDragMode}
+              />
+            </div>
+          </SortableBlockItem>
         );
       })}
     </>
@@ -822,9 +945,30 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
 ) {
   const [blockPageMap, setBlockPageMap] = useState({});
   const [measured, setMeasured] = useState(false);
+  const [isDragMode, setIsDragMode] = useState(false);
   const measureRef = useRef(null);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
   const { preamble, sections } = computeSections(blocks);
+
+  const handleDragEnd = useCallback(
+    (event) => {
+      const { active, over } = event;
+
+      if (over && active.id !== over.id) {
+        const oldIndex = blocks.findIndex((b) => b.id === active.id);
+        const newIndex = blocks.findIndex((b) => b.id === over.id);
+        onChange(arrayMove(blocks, oldIndex, newIndex));
+      }
+    },
+    [blocks, onChange]
+  );
 
   // ── Auto-inject DOC_HEADER for resumes when AI-generated blocks omit it ───
   useEffect(() => {
@@ -932,7 +1076,38 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
   useImperativeHandle(
     ref,
     () => ({
+      toggleDragMode() {
+        setIsDragMode((prev) => !prev);
+        if (!isDragMode) {
+          onSelectionChange?.(null); // Clear selection when entering drag mode
+        }
+      },
+      isDragMode,
       addBlock(type, afterId) {
+        // Handle special 'section-with-content' type that creates 3 blocks
+        if (type === 'section-with-content') {
+          const sectionTitle = createSectionTitleBlock('NEW SECTION');
+          const subheading = createSubheadingBlock();
+          const textBlock = createTextBlock();
+          const newBlocks = [sectionTitle, subheading, textBlock];
+
+          if (!afterId) {
+            onChange([...blocks, ...newBlocks]);
+          } else {
+            // If afterId is a section title, insert after last child of that section
+            const { sections: secs } = computeSections(blocks);
+            const sec = secs.find((s) => s.titleBlock.id === afterId);
+            const insertAfterId = sec?.children?.at(-1)?.id ?? afterId;
+            const idx = blocks.findIndex((b) => b.id === insertAfterId);
+            const next = [...blocks];
+            next.splice(idx + 1, 0, ...newBlocks);
+            onChange(next);
+          }
+          onSelectionChange?.(sectionTitle.id);
+          return;
+        }
+
+        // Normal single block creation
         const newBlock = makeBlock(type);
         if (!afterId) {
           onChange([...blocks, newBlock]);
@@ -1011,65 +1186,76 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
       </div>
 
       {/* ── Visible paged canvas ───────────────────────────────────────── */}
-      <div
-        className="doc-light flex flex-col items-center"
-        style={{ gap: PAGE_GAP }}
-        onClick={() => onSelectionChange?.(null)} // click outside any block deselects
-      >
-        {blocksByPage.map((pageBlocks, pageIndex) => (
-          <div
-            key={pageIndex}
-            className="bg-white shadow-[0_1px_12px_rgba(0,0,0,0.12)] rounded-sm"
-            style={pageStyle}
-          >
-            {/* Page N label */}
-            {pageIndex > 0 && (
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <div
+          className="doc-light flex flex-col items-center"
+          style={{ gap: PAGE_GAP }}
+          onClick={() => !isDragMode && onSelectionChange?.(null)} // click outside any block deselects
+        >
+          {blocksByPage.map((pageBlocks, pageIndex) => (
+            <SortableContext
+              key={pageIndex}
+              items={pageBlocks.map((b) => b.id)}
+              strategy={verticalListSortingStrategy}
+            >
               <div
-                style={{
-                  position: 'absolute',
-                  top: -PAGE_GAP,
-                  left: 0,
-                  right: 0,
-                  height: PAGE_GAP,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '0 16px',
-                  pointerEvents: 'none',
-                }}
+                className="bg-white shadow-[0_1px_12px_rgba(0,0,0,0.12)] rounded-sm"
+                style={pageStyle}
               >
-                <div style={{ flex: 1, height: 1, background: '#9ca3af' }} />
-                <span style={{ fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap' }}>
-                  Page {pageIndex + 1}
-                </span>
-                <div style={{ flex: 1, height: 1, background: '#9ca3af' }} />
+                {/* Page N label */}
+                {pageIndex > 0 && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: -PAGE_GAP,
+                      left: 0,
+                      right: 0,
+                      height: PAGE_GAP,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 12,
+                      padding: '0 16px',
+                      pointerEvents: 'none',
+                    }}
+                  >
+                    <div style={{ flex: 1, height: 1, background: '#9ca3af' }} />
+                    <span style={{ fontSize: 11, color: '#6b7280', whiteSpace: 'nowrap' }}>
+                      Page {pageIndex + 1}
+                    </span>
+                    <div style={{ flex: 1, height: 1, background: '#9ca3af' }} />
+                  </div>
+                )}
+
+                <PageBlocks
+                  pageBlocks={pageBlocks}
+                  allBlocks={blocks}
+                  documentType={documentType}
+                  jobId={jobId}
+                  onBlockUpdate={updateBlock}
+                  onSectionTitleChange={updateSectionTitle}
+                  selectedBlockId={selectedBlockId}
+                  onSelectBlock={(id) => onSelectionChange?.(id)}
+                  sections={sections}
+                  isDragMode={isDragMode}
+                />
+
+                {/* Letter documents: add-block button at end of last page */}
+                {documentType !== 'resume' &&
+                  pageIndex === blocksByPage.length - 1 &&
+                  !isDragMode && (
+                    <InlineAddMenu
+                      onAdd={(type) => {
+                        const factory =
+                          type === BLOCK_TYPES.TEXT ? createTextBlock : createBulletBlock;
+                        onChange([...blocks, factory()]);
+                      }}
+                    />
+                  )}
               </div>
-            )}
-
-            <PageBlocks
-              pageBlocks={pageBlocks}
-              allBlocks={blocks}
-              documentType={documentType}
-              jobId={jobId}
-              onBlockUpdate={updateBlock}
-              onSectionTitleChange={updateSectionTitle}
-              selectedBlockId={selectedBlockId}
-              onSelectBlock={(id) => onSelectionChange?.(id)}
-              sections={sections}
-            />
-
-            {/* Letter documents: add-block button at end of last page */}
-            {documentType !== 'resume' && pageIndex === blocksByPage.length - 1 && (
-              <InlineAddMenu
-                onAdd={(type) => {
-                  const factory = type === BLOCK_TYPES.TEXT ? createTextBlock : createBulletBlock;
-                  onChange([...blocks, factory()]);
-                }}
-              />
-            )}
-          </div>
-        ))}
-      </div>
+            </SortableContext>
+          ))}
+        </div>
+      </DndContext>
     </>
   );
 });

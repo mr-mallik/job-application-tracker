@@ -7,8 +7,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import RichTextEditor from '@/components/document/RichTextEditor';
-import { ensureSlate, slateToText, slateFromText } from '@/lib/slateUtils';
 import {
   User,
   Mail,
@@ -35,7 +33,7 @@ export default function BasicInformationPage() {
     portfolio: '',
     summary: '',
   });
-  const [achievements, setAchievements] = useState(slateFromText(''));
+  const [achievements, setAchievements] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [parsing, setParsing] = useState(false);
@@ -67,7 +65,7 @@ export default function BasicInformationPage() {
         });
         // Load achievements as Slate value
         const achievementsText = data.user.profile?.achievements || '';
-        setAchievements(slateFromText(achievementsText));
+        setAchievements(achievementsText);
       }
     } catch (error) {
       console.error('Failed to load profile:', error);
@@ -96,7 +94,7 @@ export default function BasicInformationPage() {
             linkedin: profile.linkedin,
             portfolio: profile.portfolio,
             summary: profile.summary,
-            achievements: slateToText(achievements),
+            achievements: achievements,
           },
         }),
       });
@@ -162,7 +160,7 @@ export default function BasicInformationPage() {
 
           // Update achievements if parsed
           if (parsed.achievements) {
-            setAchievements(slateFromText(parsed.achievements));
+            setAchievements(parsed.achievements);
           }
 
           toast({
@@ -421,17 +419,17 @@ export default function BasicInformationPage() {
         <CardContent className="space-y-2">
           <Label htmlFor="achievements">Achievements</Label>
           <div className="border rounded-md p-3 bg-background min-h-[200px]">
-            <RichTextEditor
+            <Textarea
+              id="achievements"
               value={achievements}
-              onChange={setAchievements}
-              placeholder="• AWS Certified Solutions Architect - Professional (2024)\n• Published author: 'Modern Web Development' - O'Reilly Media\n• Winner of Best Innovation Award at TechCon 2023\n• Speaker at React Summit, JSConf, and Node.js Interactive\n\nUse bullet points or formatted text to list your achievements, awards, certifications, publications, speaking engagements, or other notable accomplishments."
+              onChange={(e) => setAchievements(e.target.value)}
+              placeholder="Certified AWS Solutions Architect\nPublished research paper in Journal of AI Research\nSpeaker at Tech Conference 2023\n- Employee of the Year 2022"
               className="min-h-[180px]"
             />
           </div>
           <p className="text-xs text-muted-foreground">
             List your professional achievements, certifications, awards, publications, conference
-            talks, or other career highlights. Use the formatting toolbar for bold, italic, links,
-            and bullet points.
+            talks, or other career highlights.
           </p>
         </CardContent>
       </Card>

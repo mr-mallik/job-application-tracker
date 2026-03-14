@@ -3,18 +3,48 @@ import { Document, Page, View, StyleSheet } from '@react-pdf/renderer';
 import { renderPDFBlock } from '@/lib/pdfHelpers';
 import { BLOCK_TYPES } from '@/lib/blockSchema';
 
+// Helper to lighten a hex color by a percentage (0-100)
+function lightenColor(hex, percent) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.min(255, Math.floor((num >> 16) + ((255 - (num >> 16)) * percent) / 100));
+  const g = Math.min(
+    255,
+    Math.floor(((num >> 8) & 0x00ff) + ((255 - ((num >> 8) & 0x00ff)) * percent) / 100)
+  );
+  const b = Math.min(
+    255,
+    Math.floor((num & 0x0000ff) + ((255 - (num & 0x0000ff)) * percent) / 100)
+  );
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+// Helper to get the correct bold font variant
+function getBoldFont(fontFamily) {
+  const boldMap = {
+    Helvetica: 'Helvetica-Bold',
+    'Times-Roman': 'Times-Bold',
+    Courier: 'Courier-Bold',
+  };
+  return boldMap[fontFamily] || 'Helvetica-Bold';
+}
+
 // Creative Resume Template — Two-column layout with coloured sidebar
 function makeStyles({
   sidebarColor = '#1E3A8A',
   accentColor = '#1E3A8A',
   pagePadding = 30,
   baseFontSize = 10,
+  fontFamily = 'Helvetica',
 } = {}) {
+  const accentLight = lightenColor(accentColor, 30);
+  const accentLighter = lightenColor(accentColor, 50);
+  const boldFont = getBoldFont(fontFamily);
+
   return StyleSheet.create({
     page: {
       flexDirection: 'row',
       fontSize: baseFontSize,
-      fontFamily: 'Helvetica',
+      fontFamily: fontFamily,
       backgroundColor: '#FFFFFF',
     },
     leftColumn: {
@@ -31,16 +61,16 @@ function makeStyles({
     name: {
       textTransform: 'uppercase',
       fontSize: baseFontSize + 12,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: boldFont,
       color: '#FFFFFF',
       marginBottom: 6,
       textAlign: 'center',
     },
     designation: {
       fontSize: baseFontSize + 2,
-      color: '#93C5FD',
+      color: accentLighter,
       marginBottom: 12,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: boldFont,
       textAlign: 'center',
     },
     contactRow: { flexDirection: 'column', alignItems: 'center', marginTop: 4 },
@@ -48,15 +78,15 @@ function makeStyles({
     link: { color: '#93C5FD', textDecoration: 'none' },
     sectionTitle: {
       fontSize: baseFontSize + 4,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: boldFont,
       color: accentColor,
       marginBottom: 10,
       paddingBottom: 4,
-      borderBottom: '2 solid #DBEAFE',
+      borderBottom: `2 solid ${accentLighter}`,
     },
     leftSectionTitle: {
       fontSize: baseFontSize + 2,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: boldFont,
       color: '#FFFFFF',
       marginBottom: 8,
       paddingBottom: 4,
@@ -67,13 +97,13 @@ function makeStyles({
     leftItemContainer: { marginBottom: 10 },
     subheading: {
       fontSize: baseFontSize + 1,
-      fontFamily: 'Helvetica-Bold',
-      color: '#1F2937',
+      fontFamily: boldFont,
+      color: accentLight,
       marginBottom: 3,
     },
     leftSubheading: {
       fontSize: baseFontSize,
-      fontFamily: 'Helvetica-Bold',
+      fontFamily: boldFont,
       color: '#FFFFFF',
       marginTop: 4,
       marginBottom: 2,

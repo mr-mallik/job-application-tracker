@@ -38,6 +38,7 @@ export default function DocumentEditorPage({ documentId }) {
   const [title, setTitle] = useState('');
   const [template, setTemplate] = useState('ats');
   const [documentType, setDocumentType] = useState('resume');
+  const [styleOverrides, setStyleOverrides] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -99,6 +100,7 @@ export default function DocumentEditorPage({ documentId }) {
       setTitle(loaded.title || '');
       setTemplate(loaded.template || 'ats');
       setDocumentType(loaded.type || 'resume');
+      setStyleOverrides(loaded.styleOverrides || {});
       setBlocks(migratedBlocks);
       setPreviewBlocks(migratedBlocks);
       setIsDirty(false);
@@ -113,7 +115,7 @@ export default function DocumentEditorPage({ documentId }) {
 
   // ── Save ──────────────────────────────────────────────────────────────────
   const saveNow = useCallback(
-    async (currentBlocks, currentTitle, currentTemplate) => {
+    async (currentBlocks, currentTitle, currentTemplate, currentStyleOverrides) => {
       if (!dirtyRef.current) return;
       setIsSaving(true);
       try {
@@ -128,6 +130,7 @@ export default function DocumentEditorPage({ documentId }) {
             blocks: currentBlocks,
             title: currentTitle,
             template: currentTemplate,
+            styleOverrides: currentStyleOverrides,
           }),
         });
 
@@ -147,10 +150,10 @@ export default function DocumentEditorPage({ documentId }) {
 
   // Debounced autosave
   const scheduleAutosave = useCallback(
-    (newBlocks, newTitle, newTemplate) => {
+    (newBlocks, newTitle, newTemplate, newStyleOverrides) => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       saveTimerRef.current = setTimeout(() => {
-        saveNow(newBlocks, newTitle, newTemplate);
+        saveNow(newBlocks, newTitle, newTemplate, newStyleOverrides);
       }, AUTOSAVE_DELAY);
     },
     [saveNow]
@@ -208,35 +211,41 @@ export default function DocumentEditorPage({ documentId }) {
       }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault();
-        saveNow(blocks, title, template);
+        saveNow(blocks, title, template, styleOverrides);
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleUndo, handleRedo, saveNow, blocks, title, template]);
+  }, [handleUndo, handleRedo, saveNow, blocks, title, template, styleOverrides]);
 
   const handleBlocksChange = (newBlocks) => {
     pushHistory(blocks);
     setBlocks(newBlocks);
     markDirty();
-    scheduleAutosave(newBlocks, title, template);
+    scheduleAutosave(newBlocks, title, template, styleOverrides);
   };
 
   const handleTitleChange = (newTitle) => {
     setTitle(newTitle);
     markDirty();
-    scheduleAutosave(blocks, newTitle, template);
+    scheduleAutosave(blocks, newTitle, template, styleOverrides);
   };
 
   const handleTemplateChange = (newTemplate) => {
     setTemplate(newTemplate);
     markDirty();
-    scheduleAutosave(blocks, title, newTemplate);
+    scheduleAutosave(blocks, title, newTemplate, styleOverrides);
+  };
+
+  const handleStyleChange = (newStyleOverrides) => {
+    setStyleOverrides(newStyleOverrides);
+    markDirty();
+    scheduleAutosave(blocks, title, template, newStyleOverrides);
   };
 
   const handleManualSave = () => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveNow(blocks, title, template);
+    saveNow(blocks, title, template, styleOverrides);
   };
 
   const handleFetchFromProfile = () => {
@@ -414,6 +423,7 @@ export default function DocumentEditorPage({ documentId }) {
           onSave={handleManualSave}
           onFetchFromProfile={documentType === 'resume' ? handleFetchFromProfile : undefined}
           onDeleteClick={() => setDeleteOpen(true)}
+          styleOverrides={styleOverrides}
           aiRefineSlot={
             <AIRefineDialog
               documentType={documentType}
@@ -448,6 +458,8 @@ export default function DocumentEditorPage({ documentId }) {
             resumeText={documentType === 'resume' ? blocksToPreview(blocks, 8000) : ''}
             isDragMode={isDragMode}
             onToggleDragMode={handleToggleDragMode}
+            styleOverrides={styleOverrides}
+            onStyleChange={handleStyleChange}
           />
 
           {/* Scrollable A4 canvas area */}
@@ -464,6 +476,7 @@ export default function DocumentEditorPage({ documentId }) {
               selectedBlockId={selectedBlockId}
               onSelectionChange={setSelectedBlockId}
               userProfile={user ? { name: user.name, ...user.profile } : null}
+              styleOverrides={styleOverrides}
             />
           </div>
 
@@ -490,7 +503,11 @@ export default function DocumentEditorPage({ documentId }) {
           {/* PDF Preview panel — only re-renders when previewBlocks changes */}
           {showPreview && (
             <div className="w-[480px] xl:w-[540px] shrink-0 border-l bg-muted/10 overflow-hidden">
-              <PDFPreviewPanel blocks={previewBlocks} template={template} />
+              <PDFPreviewPanel
+                blocks={previewBlocks}
+                template={template}
+                styleOverrides={styleOverrides}
+              />
             </div>
           )}
         </div>

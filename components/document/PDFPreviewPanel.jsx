@@ -31,8 +31,37 @@ function PDFLoadingSpinner() {
   );
 }
 
-export default function PDFPreviewPanel({ blocks, template }) {
+export default function PDFPreviewPanel({ blocks, template, styleOverrides = {} }) {
   const TemplateComponent = TEMPLATE_MAP[template] || ATSResumeTemplate;
+
+  // Convert fontSize preset to actual baseFontSize value
+  const getBaseFontSize = (template, fontSize = 'medium') => {
+    const baseValues = {
+      ats: 14,
+      modern: 11,
+      creative: 10,
+      formal: 11,
+    };
+    const base = baseValues[template] || 11;
+    const scales = { small: 0.9, medium: 1.0, large: 1.1 };
+    const scale = scales[fontSize] || 1.0;
+    return Math.round(base * scale);
+  };
+
+  // Only pass defined values to avoid overriding template defaults with undefined
+  const computedStyleOverrides = {};
+  if (styleOverrides.accentColor) {
+    computedStyleOverrides.accentColor = styleOverrides.accentColor;
+  }
+  if (styleOverrides.pagePadding) {
+    computedStyleOverrides.pagePadding = styleOverrides.pagePadding;
+  }
+  if (styleOverrides.fontSize) {
+    computedStyleOverrides.baseFontSize = getBaseFontSize(template, styleOverrides.fontSize);
+  }
+  if (styleOverrides.fontFamily) {
+    computedStyleOverrides.fontFamily = styleOverrides.fontFamily;
+  }
 
   // Stable key prevents full remount on every keystroke — only remount on template change
   const viewerKey = template;
@@ -47,7 +76,7 @@ export default function PDFPreviewPanel({ blocks, template }) {
           showToolbar={false}
           style={{ border: 'none' }}
         >
-          <TemplateComponent blocks={blocks} />
+          <TemplateComponent blocks={blocks} styleOverrides={computedStyleOverrides} />
         </PDFViewer>
       </div>
     </div>

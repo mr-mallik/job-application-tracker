@@ -36,6 +36,181 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { BLOCK_TYPES } from '@/lib/blockSchema';
+import {
+  Popover as RadixPopover,
+  PopoverContent as RadixPopoverContent,
+  PopoverTrigger as RadixPopoverTrigger,
+} from '@/components/ui/popover';
+import { Label } from '@/components/ui/label';
+import { Palette } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+// ─── Style controls panel ──────────────────────────────────────────────────
+
+const PRESET_COLORS = [
+  { name: 'Gray', value: '#374151' },
+  { name: 'Blue', value: '#2563EB' },
+  { name: 'Indigo', value: '#4F46E5' },
+  { name: 'Purple', value: '#7C3AED' },
+  { name: 'Pink', value: '#DB2777' },
+  { name: 'Red', value: '#DC2626' },
+  { name: 'Orange', value: '#EA580C' },
+  { name: 'Amber', value: '#D97706' },
+  { name: 'Green', value: '#059669' },
+  { name: 'Teal', value: '#0D9488' },
+];
+
+const FONT_SIZES = [
+  { label: 'Small', value: 'small', scale: 0.9 },
+  { label: 'Medium', value: 'medium', scale: 1.0 },
+  { label: 'Large', value: 'large', scale: 1.1 },
+];
+
+const PAGE_PADDINGS = [
+  { label: 'Compact', value: 30 },
+  { label: 'Normal', value: 40 },
+  { label: 'Spacious', value: 50 },
+];
+
+const FONT_FAMILIES = [
+  { label: 'Sans-serif (Helvetica)', value: 'Helvetica' },
+  { label: 'Serif (Times)', value: 'Times-Roman' },
+  { label: 'Monospace (Courier)', value: 'Courier' },
+];
+
+function StyleControlsPanel({ styleOverrides, onStyleChange, isResume }) {
+  const [open, setOpen] = useState(false);
+  const currentFontSize = styleOverrides?.fontSize || 'medium';
+  const currentPadding = styleOverrides?.pagePadding || 40;
+  const currentColor = styleOverrides?.accentColor || '#374151';
+  const currentFontFamily = styleOverrides?.fontFamily || 'Helvetica';
+
+  const handleColorChange = (color) => {
+    onStyleChange({ ...styleOverrides, accentColor: color });
+  };
+
+  const handleFontSizeChange = (size) => {
+    onStyleChange({ ...styleOverrides, fontSize: size });
+  };
+
+  const handlePaddingChange = (padding) => {
+    onStyleChange({ ...styleOverrides, pagePadding: padding });
+  };
+
+  const handleFontFamilyChange = (family) => {
+    onStyleChange({ ...styleOverrides, fontFamily: family });
+  };
+
+  if (!isResume) return null;
+
+  return (
+    <RadixPopover open={open} onOpenChange={setOpen}>
+      <Tip label="PDF style settings">
+        <RadixPopoverTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-10 w-10 shrink-0">
+            <Palette className="w-5 h-5" />
+          </Button>
+        </RadixPopoverTrigger>
+      </Tip>
+      <RadixPopoverContent side="right" align="start" className="w-72 p-4">
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold mb-3">PDF Styling</h3>
+          </div>
+
+          {/* Accent Color */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Accent Color</Label>
+            <div className="grid grid-cols-5 gap-2">
+              {PRESET_COLORS.map((color) => (
+                <button
+                  key={color.value}
+                  type="button"
+                  onClick={() => handleColorChange(color.value)}
+                  className={cn(
+                    'w-10 h-10 rounded border-2 transition-all hover:scale-110',
+                    currentColor === color.value
+                      ? 'border-primary ring-2 ring-primary/20'
+                      : 'border-border hover:border-primary/50'
+                  )}
+                  style={{ backgroundColor: color.value }}
+                  title={color.name}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Font Size */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Font Size</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {FONT_SIZES.map((size) => (
+                <button
+                  key={size.value}
+                  type="button"
+                  onClick={() => handleFontSizeChange(size.value)}
+                  className={cn(
+                    'px-3 py-2 text-xs rounded border transition-colors',
+                    currentFontSize === size.value
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background hover:bg-muted border-border'
+                  )}
+                >
+                  {size.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Page Padding */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Page Margins</Label>
+            <div className="grid grid-cols-3 gap-2">
+              {PAGE_PADDINGS.map((padding) => (
+                <button
+                  key={padding.value}
+                  type="button"
+                  onClick={() => handlePaddingChange(padding.value)}
+                  className={cn(
+                    'px-3 py-2 text-xs rounded border transition-colors',
+                    currentPadding === padding.value
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-background hover:bg-muted border-border'
+                  )}
+                >
+                  {padding.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Font Family */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium">Font Family</Label>
+            <Select value={currentFontFamily} onValueChange={handleFontFamilyChange}>
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {FONT_FAMILIES.map((font) => (
+                  <SelectItem key={font.value} value={font.value} className="text-xs">
+                    {font.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </RadixPopoverContent>
+    </RadixPopover>
+  );
+}
 
 // ─── Keyword analysis panel ────────────────────────────────────────────────
 
@@ -350,6 +525,8 @@ function Divider() {
  *   resumeText         string
  *   isDragMode         bool
  *   onToggleDragMode   () => void
+ *   styleOverrides     object
+ *   onStyleChange      (styleOverrides) => void
  */
 export default function FloatingDocToolbar({
   selectedBlock,
@@ -370,6 +547,8 @@ export default function FloatingDocToolbar({
   resumeText,
   isDragMode,
   onToggleDragMode,
+  styleOverrides,
+  onStyleChange,
 }) {
   const [addOpen, setAddOpen] = useState(false);
   const [refineOpen, setRefineOpen] = useState(false);
@@ -432,6 +611,13 @@ export default function FloatingDocToolbar({
 
       {/* ── Keyword coverage ────────────────────────────────────────────── */}
       {isResume && <KeywordPanel jobId={jobId} resumeText={resumeText} />}
+
+      {/* ── PDF Style Controls ──────────────────────────────────────────── */}
+      <StyleControlsPanel
+        styleOverrides={styleOverrides}
+        onStyleChange={onStyleChange}
+        isResume={isResume}
+      />
 
       {/* ── Add block ───────────────────────────────────────────────────── */}
       {!isDragMode && (

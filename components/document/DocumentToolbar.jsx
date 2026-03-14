@@ -20,7 +20,7 @@ import {
   DialogFooter,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Save, Download, RefreshCw, Circle, Eye, UserRound, Trash2 } from 'lucide-react';
+import { ArrowLeft, Save, Download, RefreshCw, Circle, UserRound, Trash2 } from 'lucide-react';
 
 // Direct imports required — dynamic() wrappers break @react-pdf/renderer's renderer
 import ATSResumeTemplate from '@/components/pdf-templates/ATSResumeTemplate';
@@ -33,17 +33,6 @@ const PDFDownloadLink = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
   { ssr: false }
 );
-
-// PDFViewer for in-dialog preview — browser-only APIs
-const PDFViewer = dynamic(() => import('@react-pdf/renderer').then((mod) => mod.PDFViewer), {
-  ssr: false,
-  loading: () => (
-    <div className="flex items-center justify-center h-full">
-      <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
-      <span className="ml-2 text-sm text-muted-foreground">Rendering PDF…</span>
-    </div>
-  ),
-});
 
 const TEMPLATE_MAP = {
   ats: ATSResumeTemplate,
@@ -75,13 +64,42 @@ export default function DocumentToolbar({
   onFetchFromProfile,
   onDeleteClick,
   aiRefineSlot,
+  styleOverrides = {},
 }) {
-  const [previewOpen, setPreviewOpen] = useState(false);
   const [confirmFetchOpen, setConfirmFetchOpen] = useState(false);
 
   const TemplateComponent = TEMPLATE_MAP[template] || ATSResumeTemplate;
   const templates = TEMPLATES_BY_TYPE[documentType] || TEMPLATES_BY_TYPE.resume;
   const fileName = `${title.replace(/\s+/g, '_') || 'document'}.pdf`;
+
+  // Convert fontSize preset to actual baseFontSize value
+  const getBaseFontSize = (template, fontSize = 'medium') => {
+    const baseValues = {
+      ats: 14,
+      modern: 11,
+      creative: 10,
+      formal: 11,
+    };
+    const base = baseValues[template] || 11;
+    const scales = { small: 0.9, medium: 1.0, large: 1.1 };
+    const scale = scales[fontSize] || 1.0;
+    return Math.round(base * scale);
+  };
+
+  // Compute style overrides for PDF templates
+  const computedStyleOverrides = {};
+  if (styleOverrides.accentColor) {
+    computedStyleOverrides.accentColor = styleOverrides.accentColor;
+  }
+  if (styleOverrides.pagePadding) {
+    computedStyleOverrides.pagePadding = styleOverrides.pagePadding;
+  }
+  if (styleOverrides.fontSize) {
+    computedStyleOverrides.baseFontSize = getBaseFontSize(template, styleOverrides.fontSize);
+  }
+  if (styleOverrides.fontFamily) {
+    computedStyleOverrides.fontFamily = styleOverrides.fontFamily;
+  }
 
   return (
     <>
@@ -160,11 +178,22 @@ export default function DocumentToolbar({
           {isSaving ? 'Saving…' : 'Save'}
         </Button>
 
-        {/* Preview & Download PDF */}
-        <Button size="sm" variant="outline" onClick={() => setPreviewOpen(true)}>
-          <Eye className="w-3 h-3 mr-2" />
-          PDF
-        </Button>
+        {/* Download PDF */}
+        <PDFDownloadLink
+          document={<TemplateComponent blocks={blocks} styleOverrides={computedStyleOverrides} />}
+          fileName={fileName}
+        >
+          {({ loading }) => (
+            <Button size="sm" variant="outline" disabled={loading}>
+              {loading ? (
+                <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
+              ) : (
+                <Download className="w-3 h-3 mr-2" />
+              )}
+              {loading ? 'Preparing…' : 'Download'}
+            </Button>
+          )}
+        </PDFDownloadLink>
 
         {/* Delete document */}
         {onDeleteClick && (
@@ -179,45 +208,6 @@ export default function DocumentToolbar({
           </Button>
         )}
       </div>
-
-      {/* ── PDF Preview Dialog ──────────────────────────────────────────── */}
-      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-        <DialogContent className="max-w-4xl w-[90vw] h-[90vh] flex flex-col p-0 gap-0">
-          <DialogHeader className="px-6 py-4 border-b shrink-0">
-            <DialogTitle className="text-base">PDF Preview — {title || 'Untitled'}</DialogTitle>
-            <DialogDescription className="text-xs">
-              Review your document before downloading.
-            </DialogDescription>
-          </DialogHeader>
-
-          {/* PDF viewer fills remaining space */}
-          <div className="flex-1 overflow-hidden">
-            {previewOpen && (
-              <PDFViewer width="100%" height="100%" showToolbar={false} style={{ border: 'none' }}>
-                <TemplateComponent blocks={blocks} />
-              </PDFViewer>
-            )}
-          </div>
-
-          <div className="px-6 py-3 border-t shrink-0 flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setPreviewOpen(false)}>
-              Close
-            </Button>
-            <PDFDownloadLink document={<TemplateComponent blocks={blocks} />} fileName={fileName}>
-              {({ loading }) => (
-                <Button size="sm" disabled={loading}>
-                  {loading ? (
-                    <RefreshCw className="w-3 h-3 mr-2 animate-spin" />
-                  ) : (
-                    <Download className="w-3 h-3 mr-2" />
-                  )}
-                  {loading ? 'Preparing…' : 'Download PDF'}
-                </Button>
-              )}
-            </PDFDownloadLink>
-          </div>
-        </DialogContent>
-      </Dialog>
 
       {/* ── Fetch from Profile Confirmation Dialog ──────────────────────── */}
       <Dialog open={confirmFetchOpen} onOpenChange={setConfirmFetchOpen}>

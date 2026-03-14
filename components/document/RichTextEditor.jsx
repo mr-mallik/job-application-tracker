@@ -432,7 +432,7 @@ export default function RichTextEditor({
               <div className="flex-1" />
 
               {/* Per-block AI refine */}
-              <AIRefineButton value={value} onChange={onChange} jobId={jobId} />
+              {/*<AIRefineButton value={value} onChange={onChange} jobId={jobId} /> */}
             </div>
 
             {/* Inline link URL input row — no portal, preserves editor selection */}

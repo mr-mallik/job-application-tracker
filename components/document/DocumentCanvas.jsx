@@ -84,6 +84,29 @@ export function flattenSections({ preamble, sections }) {
   return [...preamble, ...sections.flatMap((s) => [s.titleBlock, ...s.children])];
 }
 
+// ─── Color utilities ───────────────────────────────────────────────────────
+
+/**
+ * Lightens a hex color by a percentage.
+ * @param {string} hex - Hex color (e.g., '#1e40af')
+ * @param {number} percent - Percentage to lighten (0-100)
+ * @returns {string} Lightened hex color
+ */
+function lightenColor(hex, percent) {
+  if (!hex) return '#000000';
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.min(
+    255,
+    ((num >> 16) & 0xff) + Math.round((255 - ((num >> 16) & 0xff)) * (percent / 100))
+  );
+  const g = Math.min(
+    255,
+    ((num >> 8) & 0xff) + Math.round((255 - ((num >> 8) & 0xff)) * (percent / 100))
+  );
+  const b = Math.min(255, (num & 0xff) + Math.round((255 - (num & 0xff)) * (percent / 100)));
+  return '#' + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+}
+
 // ─── Block renderers ───────────────────────────────────────────────────────
 
 // Styles that mirror the ATS PDF template
@@ -181,7 +204,7 @@ function LinksEditorDialog({ links, open, onOpenChange, onSave }) {
 
 // ─── DocHeader block renderer ─────────────────────────────────────────────
 
-function DocHeaderBlock({ block, onChange, isDragMode }) {
+function DocHeaderBlock({ block, onChange, isDragMode, accentColor }) {
   const { data } = block;
   const links = data.links || [];
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -200,7 +223,7 @@ function DocHeaderBlock({ block, onChange, isDragMode }) {
           'border-0 bg-transparent text-center focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5',
           isDragMode && 'cursor-move'
         )}
-        style={{ fontSize: '1.4rem' }}
+        style={{ fontSize: '1.4rem', color: accentColor }}
       />
       <Input
         value={data.designation || ''}
@@ -211,6 +234,7 @@ function DocHeaderBlock({ block, onChange, isDragMode }) {
           'border-0 bg-transparent text-center text-sm text-gray-500 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0.5',
           isDragMode && 'cursor-move'
         )}
+        style={{ color: lightenColor(accentColor, 30) }}
       />
 
       {/* Contact links — compact chip row */}
@@ -295,7 +319,7 @@ function ClHeaderBlock({ block, onChange, isDragMode }) {
 
 // ─── Subheading block ─────────────────────────────────────────────────────
 
-function SubheadingBlock({ block, onChange, isDragMode }) {
+function SubheadingBlock({ block, onChange, isDragMode, accentColor }) {
   const { data } = block;
   const update = (partial) => onChange({ ...block, data: { ...data, ...partial } });
 
@@ -311,6 +335,7 @@ function SubheadingBlock({ block, onChange, isDragMode }) {
             'border-0 bg-transparent font-semibold text-[0.85rem] focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 flex-1 p-0',
             isDragMode && 'cursor-move'
           )}
+          style={{ color: lightenColor(accentColor, 30) }}
         />
         <Input
           value={data.dateRange || ''}
@@ -375,7 +400,7 @@ function AutoResizeTextarea({ value, onChange, placeholder, className, disabled 
   );
 }
 
-function SkillGroupBlock({ block, onChange, isDragMode }) {
+function SkillGroupBlock({ block, onChange, isDragMode, accentColor }) {
   const { data } = block;
   const update = (partial) => onChange({ ...block, data: { ...data, ...partial } });
   const skillsStr = (data.skills || []).join(', ');
@@ -407,7 +432,7 @@ function SkillGroupBlock({ block, onChange, isDragMode }) {
           'border-0 bg-transparent text-xs font-semibold text-gray-600 focus-visible:ring-0 focus-visible:ring-offset-0 h-auto py-0 p-0 shrink-0 mt-px',
           isDragMode && 'cursor-move'
         )}
-        style={{ width: `${labelWidth}px` }}
+        style={{ width: `${labelWidth}px`, color: accentColor }}
       />
       <span className="text-xs text-gray-400 shrink-0 mt-px">:</span>
       <AutoResizeTextarea
@@ -512,7 +537,7 @@ function ClClosingBlock({ block, onChange, isDragMode }) {
 // instances for every block.  Sharing the same slateContent objects between
 // two editors causes "Unable to find the path for Slate node" crashes.
 
-function MeasureBlockRenderer({ block }) {
+function MeasureBlockRenderer({ block, accentColor }) {
   switch (block.type) {
     case BLOCK_TYPES.DOC_HEADER: {
       const { data } = block;
@@ -594,7 +619,10 @@ function MeasureBlockRenderer({ block }) {
       );
     case BLOCK_TYPES.SECTION_TITLE:
       return (
-        <div className={cn(PAGE_STYLES.sectionTitle, 'uppercase mt-1')}>
+        <div
+          className={cn(PAGE_STYLES.sectionTitle, 'uppercase mt-1')}
+          style={{ color: accentColor, borderColor: accentColor + '50' }}
+        >
           {block.data.title || 'SECTION'}
         </div>
       );
@@ -628,7 +656,7 @@ function MeasureBlockRenderer({ block }) {
 
 // ─── Block router ─────────────────────────────────────────────────────────
 
-function BlockRenderer({ block, onChange, jobId, isDragMode }) {
+function BlockRenderer({ block, onChange, jobId, isDragMode, accentColor }) {
   const handleRichChange = useCallback(
     (newSlate) => {
       if (isDragMode) return;
@@ -640,7 +668,14 @@ function BlockRenderer({ block, onChange, jobId, isDragMode }) {
 
   switch (block.type) {
     case BLOCK_TYPES.DOC_HEADER:
-      return <DocHeaderBlock block={block} onChange={onChange} isDragMode={isDragMode} />;
+      return (
+        <DocHeaderBlock
+          block={block}
+          onChange={onChange}
+          isDragMode={isDragMode}
+          accentColor={accentColor}
+        />
+      );
     case BLOCK_TYPES.CL_HEADER:
       return <ClHeaderBlock block={block} onChange={onChange} isDragMode={isDragMode} />;
     case BLOCK_TYPES.TEXT:
@@ -670,9 +705,23 @@ function BlockRenderer({ block, onChange, jobId, isDragMode }) {
         </div>
       );
     case BLOCK_TYPES.SUBHEADING:
-      return <SubheadingBlock block={block} onChange={onChange} isDragMode={isDragMode} />;
+      return (
+        <SubheadingBlock
+          block={block}
+          onChange={onChange}
+          isDragMode={isDragMode}
+          accentColor={accentColor}
+        />
+      );
     case BLOCK_TYPES.SKILL_GROUP:
-      return <SkillGroupBlock block={block} onChange={onChange} isDragMode={isDragMode} />;
+      return (
+        <SkillGroupBlock
+          block={block}
+          onChange={onChange}
+          isDragMode={isDragMode}
+          accentColor={accentColor}
+        />
+      );
     case BLOCK_TYPES.SPACER:
       return (
         <div
@@ -818,6 +867,7 @@ function PageBlocks({
   onSelectBlock,
   sections,
   isDragMode,
+  accentColor,
 }) {
   return (
     <>
@@ -855,6 +905,7 @@ function PageBlocks({
                     'w-full bg-transparent outline-none border-0 border-b border-gray-300 focus:border-primary py-0.5 transition-colors uppercase placeholder:text-gray-300',
                     isDragMode && 'cursor-move pointer-events-none'
                   )}
+                  style={{ color: accentColor, borderColor: accentColor + '50' }}
                 />
               </div>
             </SortableBlockItem>
@@ -881,6 +932,7 @@ function PageBlocks({
                 onChange={onBlockUpdate}
                 jobId={jobId}
                 isDragMode={isDragMode}
+                accentColor={accentColor}
               />
             </div>
           </SortableBlockItem>
@@ -940,7 +992,16 @@ function buildLinksFromProfile(profile) {
  *   moveDown(id)               — move block down
  */
 const DocumentCanvas = forwardRef(function DocumentCanvas(
-  { blocks, documentType, onChange, jobId, selectedBlockId, onSelectionChange, userProfile },
+  {
+    blocks,
+    documentType,
+    onChange,
+    jobId,
+    selectedBlockId,
+    onSelectionChange,
+    userProfile,
+    styleOverrides = {},
+  },
   ref
 ) {
   const [blockPageMap, setBlockPageMap] = useState({});
@@ -1005,7 +1066,7 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
       const next = wrappers[i + 1];
       const h = next ? next.offsetTop - el.offsetTop : container.scrollHeight - el.offsetTop;
 
-      if (used + h > A4_USABLE_HEIGHT && used > 0) {
+      if (used + h > usableHeight && used > 0) {
         page++;
         used = 0;
       }
@@ -1147,13 +1208,29 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
     [blocks, onChange, onSelectionChange, selectedBlockId, makeBlock]
   );
 
-  // ── Page style ────────────────────────────────────────────────────────
+  // ── Page style with dynamic overrides ────────────────────────────────────
+  const getFontFamilyForHTML = (pdfFont) => {
+    const fontMap = {
+      Helvetica: 'Arial, Helvetica, sans-serif',
+      'Times-Roman': '"Times New Roman", Times, serif',
+      Courier: '"Courier New", Courier, monospace',
+    };
+    return fontMap[pdfFont] || 'Arial, Helvetica, sans-serif';
+  };
+
+  const baseFontSize =
+    styleOverrides.fontSize === 'small' ? 10 : styleOverrides.fontSize === 'large' ? 12 : 11;
+  const pagePadding = styleOverrides.pagePadding || 40;
+  const fontFamily = getFontFamilyForHTML(styleOverrides.fontFamily || 'Helvetica');
+  const accentColor = styleOverrides.accentColor || '#374151';
+  const usableHeight = A4_MIN_HEIGHT - pagePadding * 2; // dynamic usable height based on padding
+
   const pageStyle = {
     width: A4_WIDTH,
     minHeight: A4_MIN_HEIGHT,
-    padding: `${A4_PADDING_V}px 50px`,
-    fontFamily: 'Arial, Helvetica, sans-serif',
-    fontSize: 11,
+    padding: `${pagePadding}px 50px`,
+    fontFamily: fontFamily,
+    fontSize: `${baseFontSize}px`,
     color: '#111',
     colorScheme: 'light',
     position: 'relative',
@@ -1170,9 +1247,9 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
           top: 0,
           left: '-9999px',
           width: A4_WIDTH,
-          padding: `${A4_PADDING_V}px 50px`,
-          fontFamily: 'Arial, Helvetica, sans-serif',
-          fontSize: 11,
+          padding: `${pagePadding}px 50px`,
+          fontFamily: fontFamily,
+          fontSize: `${baseFontSize}px`,
           visibility: 'hidden',
           pointerEvents: 'none',
           zIndex: -1,
@@ -1180,7 +1257,7 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
       >
         {blocks.map((block) => (
           <div key={block.id} data-mb={block.id}>
-            <MeasureBlockRenderer block={block} />
+            <MeasureBlockRenderer block={block} accentColor={accentColor} />
           </div>
         ))}
       </div>
@@ -1237,6 +1314,7 @@ const DocumentCanvas = forwardRef(function DocumentCanvas(
                   onSelectBlock={(id) => onSelectionChange?.(id)}
                   sections={sections}
                   isDragMode={isDragMode}
+                  accentColor={accentColor}
                 />
 
                 {/* Letter documents: add-block button at end of last page */}

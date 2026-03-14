@@ -2,35 +2,70 @@ import React from 'react';
 import { Document, Page, StyleSheet, Font } from '@react-pdf/renderer';
 import { renderPDFBlock } from '@/lib/pdfHelpers';
 
+// Helper to lighten a hex color by a percentage (0-100)
+function lightenColor(hex, percent) {
+  const num = parseInt(hex.replace('#', ''), 16);
+  const r = Math.min(255, Math.floor((num >> 16) + ((255 - (num >> 16)) * percent) / 100));
+  const g = Math.min(
+    255,
+    Math.floor(((num >> 8) & 0x00ff) + ((255 - ((num >> 8) & 0x00ff)) * percent) / 100)
+  );
+  const b = Math.min(
+    255,
+    Math.floor((num & 0x0000ff) + ((255 - (num & 0x0000ff)) * percent) / 100)
+  );
+  return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, '0')}`;
+}
+
+// Helper to get the correct bold font variant
+function getBoldFont(fontFamily) {
+  const boldMap = {
+    Helvetica: 'Helvetica-Bold',
+    'Times-Roman': 'Times-Bold',
+    Courier: 'Courier-Bold',
+  };
+  return boldMap[fontFamily] || 'Helvetica-Bold';
+}
+
 // ATS-Friendly Resume Template — Clean, simple, machine-readable
 // Styled to match DocumentCanvas.jsx exactly with tight spacing for 2-page layout
-function makeStyles({ accentColor = '#374151', pagePadding = 40, baseFontSize = 14 } = {}) {
+function makeStyles({
+  accentColor = '#374151',
+  pagePadding = 40,
+  baseFontSize = 14,
+  fontFamily = 'Helvetica',
+} = {}) {
+  const accentLight = lightenColor(accentColor, 30);
+  const accentLighter = lightenColor(accentColor, 50);
+  const boldFont = getBoldFont(fontFamily);
+
   return StyleSheet.create({
     page: {
       paddingVertical: pagePadding,
       paddingHorizontal: 35,
       fontSize: baseFontSize,
-      fontFamily: 'Helvetica',
+      fontFamily: fontFamily,
       lineHeight: 1,
     },
     header: { marginBottom: 12, textAlign: 'center' },
     name: {
       letterSpacing: 1.2, // tracking-wide
-      fontSize: 18, // text-2xl
-      fontFamily: 'Helvetica-Bold',
+      fontSize: baseFontSize + 4, // text-2xl
+      fontFamily: boldFont,
       marginBottom: 8,
       textAlign: 'center',
       textTransform: 'uppercase',
+      color: accentColor,
     },
     designation: {
       marginTop: 2,
-      fontSize: 12, // text-sm
-      color: '#6B7280', // gray-500
+      fontSize: baseFontSize - 2, // text-sm
+      color: accentLight, // lighter tone
       marginBottom: 4,
       textAlign: 'center',
     },
     contactRow: {
-      fontSize: 12, // text-xs
+      fontSize: baseFontSize - 2, // text-xs
       flexDirection: 'row',
       flexWrap: 'wrap',
       justifyContent: 'center',
@@ -38,46 +73,47 @@ function makeStyles({ accentColor = '#374151', pagePadding = 40, baseFontSize = 
       marginBottom: 6,
       gap: 8, // reduced gap
     },
-    contact: { fontSize: 12, color: '#6B7280', marginHorizontal: 1 },
+    contact: { fontSize: baseFontSize - 2, color: '#6B7280', marginHorizontal: 1 },
     link: { color: accentColor, textDecoration: 'none' },
     section: { marginBottom: 4, marginTop: 2 },
     sectionTitle: {
       letterSpacing: 1.4, // tracking-wider
-      fontSize: 14, // text-sm
-      fontFamily: 'Helvetica-Bold',
+      fontSize: baseFontSize, // text-sm
+      fontFamily: boldFont,
       textTransform: 'uppercase',
       marginTop: 6,
       marginBottom: 3,
       paddingBottom: 3, // pb-1
-      borderBottom: '1 solid #D1D5DB', // border-gray-300
+      borderBottom: `1 solid ${accentLighter}`, // lighter border
       color: accentColor,
     },
     itemContainer: { marginBottom: 3, marginTop: 4 },
     subheading: {
-      fontSize: 12, // text-[0.85rem] ≈ 13.6px
-      fontFamily: 'Helvetica-Bold',
+      fontSize: baseFontSize - 2, // text-[0.85rem] ≈ 13.6px
+      fontFamily: boldFont,
       marginBottom: 0,
+      color: accentLight, // lighter tone for subheadings
     },
-    text: { fontSize: 11, color: '#374151', lineHeight: 1.5 }, // reduced line height
+    text: { fontSize: baseFontSize - 3, color: '#374151', lineHeight: 1.5 }, // reduced line height
     bulletContainer: {
       flexDirection: 'row',
       marginBottom: 1.5,
       marginTop: 1,
       alignItems: 'flex-start',
     },
-    bulletPoint: { width: 16, fontSize: 12, color: '#6B7280' }, // text-xs, gray-500, bullet
-    bulletText: { flex: 1, fontSize: 11, color: '#374151', lineHeight: 1.5 }, // reduced line height
+    bulletPoint: { width: 16, fontSize: baseFontSize - 2, color: '#6B7280' }, // text-xs, gray-500, bullet
+    bulletText: { flex: 1, fontSize: baseFontSize - 3, color: '#374151', lineHeight: 1.5 }, // reduced line height
     skillsContainer: {
       marginBottom: 2,
       flexDirection: 'row',
     },
     skillLabelInline: {
-      fontFamily: 'Helvetica-Bold',
-      fontSize: 10, // text-xs
-      color: '#4B5563', // gray-600
+      fontFamily: boldFont,
+      fontSize: baseFontSize - 4, // text-xs
+      color: accentLight, // lighter tone
     },
     skillTags: {
-      fontSize: 10, // text-xs
+      fontSize: baseFontSize - 4, // text-xs
       color: '#374151', // gray-700
       flex: 1,
       lineHeight: 1.5,
@@ -86,11 +122,6 @@ function makeStyles({ accentColor = '#374151', pagePadding = 40, baseFontSize = 
 }
 
 export default function ATSResumeTemplate({ blocks, styleOverrides = {} }) {
-  Font.register({
-    family: 'Oswald',
-    src: 'https://fonts.gstatic.com/s/oswald/v13/Y_TKV6o8WovbUd3m_X9aAA.ttf',
-  });
-
   const styles = makeStyles(styleOverrides);
   if (!blocks?.length) return null;
   return (

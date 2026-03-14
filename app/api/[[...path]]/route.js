@@ -1226,7 +1226,7 @@ RULES:
       };
 
       const updates = { updatedAt: new Date() };
-      const allowedFields = ['title', 'template', 'blocks', 'jobId'];
+      const allowedFields = ['title', 'template', 'blocks', 'jobId', 'styleOverrides'];
       for (const field of allowedFields) {
         if (body[field] !== undefined) updates[field] = body[field];
       }

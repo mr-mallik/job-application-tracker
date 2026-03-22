@@ -805,6 +805,8 @@ async function handleRoute(request, { params }) {
               const userName = user.name || 'there';
               const subject = `Reminder: ${job.title} application deadline approaching`;
               const dayText = daysUntilDeadline === 1 ? 'day' : 'days';
+              const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
               const textLines = [
                 'Hi ' + userName + ',',
                 '',
@@ -836,7 +838,6 @@ async function handleRoute(request, { params }) {
 
               const text = textLines.join('\n');
 
-              const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
               const jobUrlLink = job.url
                 ? `<p style="margin: 8px 0;"><a href="${job.url}" style="color: #2563eb;">View Job Posting</a></p>`
                 : '';

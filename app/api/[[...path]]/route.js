@@ -20,21 +20,10 @@ import {
   extractKeywordsFromJob,
   checkKeywordPresence,
   generateInterviewQuestions,
+  generateWithFallback,
 } from '@/lib/gemini';
 import { validateBlockArray } from '@/lib/blockSchema';
-
-// MongoDB connection
-let client;
-let db;
-
-async function connectToMongo() {
-  if (!client) {
-    client = new MongoClient(process.env.MONGO_URL);
-    await client.connect();
-    db = client.db(process.env.DB_NAME || 'job_tracker');
-  }
-  return db;
-}
+import { connectToMongo as dbConnect } from '@/lib/db';
 
 function handleCORS(response) {
   response.headers.set('Access-Control-Allow-Origin', process.env.CORS_ORIGINS || '*');
@@ -134,6 +123,9 @@ function transformUserData(user) {
       interests: user.interests || [],
       achievements: user.achievements || '',
       certifications: user.certifications || [],
+      jobSearchKeywords: user.jobSearchKeywords || [],
+      autoJobSearchEnabled:
+        user.autoJobSearchEnabled !== undefined ? user.autoJobSearchEnabled : true,
     },
   };
 
@@ -152,6 +144,8 @@ function transformUserData(user) {
   delete transformed.interests;
   delete transformed.achievements;
   delete transformed.certifications;
+  delete transformed.jobSearchKeywords;
+  delete transformed.autoJobSearchEnabled;
 
   return transformed;
 }
@@ -188,7 +182,7 @@ async function handleRoute(request, { params }) {
   const method = request.method;
 
   try {
-    const db = await connectToMongo();
+    const db = await dbConnect();
 
     // Root endpoint
     if ((route === '/' || route === '/root') && method === 'GET') {
@@ -289,6 +283,10 @@ async function handleRoute(request, { params }) {
           updates.achievements = body.profile.achievements;
         if (body.profile.certifications !== undefined)
           updates.certifications = body.profile.certifications;
+        if (body.profile.jobSearchKeywords !== undefined)
+          updates.jobSearchKeywords = body.profile.jobSearchKeywords;
+        if (body.profile.autoJobSearchEnabled !== undefined)
+          updates.autoJobSearchEnabled = body.profile.autoJobSearchEnabled;
       }
 
       const updatedUser = await updateUserProfile(user.id, updates);
@@ -899,6 +897,523 @@ async function handleRoute(request, { params }) {
           )
         );
       }
+    }
+
+    // ============ JOB DISCOVERY ROUTES ============
+
+    // Daily automated job discovery cron (Vercel Cron compatible)
+    if (route === '/jobs/discover' && method === 'POST') {
+      try {
+        console.log('[Job Discovery] Starting daily job discovery...');
+
+        // Job boards to search (compatible with Vercel/Browserless)
+        const jobBoards = [
+          { name: 'LinkedIn', url: 'https://www.linkedin.com/jobs/search/?keywords=' },
+          { name: 'Indeed', url: 'https://uk.indeed.com/jobs?q=' },
+          { name: 'Jobs.ac.uk', url: 'https://www.jobs.ac.uk/search/?keywords=' },
+          { name: 'DWP Jobs', url: 'https://findajob.dwp.gov.uk/search?q=' },
+          { name: 'KTP Jobs', url: 'https://iuk-ktp.org.uk/jobs/?search=' },
+        ];
+
+        // Find all users with auto job search enabled
+        const users = await db
+          .collection('users')
+          .find({
+            autoJobSearchEnabled: true,
+            jobSearchKeywords: { $exists: true, $ne: [] },
+          })
+          .toArray();
+
+        console.log(`[Job Discovery] Found ${users.length} users with auto-search enabled`);
+
+        const summary = {
+          totalUsers: users.length,
+          usersProcessed: 0,
+          totalJobsDiscovered: 0,
+          totalJobsSaved: 0,
+          emailsSent: 0,
+          errors: [],
+        };
+
+        for (const user of users) {
+          try {
+            if (!user.jobSearchKeywords || user.jobSearchKeywords.length === 0) {
+              continue;
+            }
+
+            console.log(
+              `[Job Discovery] Processing user ${user.email} with ${user.jobSearchKeywords.length} keywords`
+            );
+
+            const userJobs = [];
+            const maxJobsPerUser = 50;
+            const jobsPerKeyword = Math.ceil(maxJobsPerUser / user.jobSearchKeywords.length);
+
+            // Search for each keyword across job boards
+            for (const keyword of user.jobSearchKeywords) {
+              if (userJobs.length >= maxJobsPerUser) break;
+
+              for (const board of jobBoards) {
+                if (userJobs.length >= maxJobsPerUser) break;
+
+                try {
+                  console.log(`[Job Discovery] Searching ${board.name} for "${keyword}"`);
+
+                  // Build search URL
+                  const searchUrl = board.url + encodeURIComponent(keyword);
+
+                  // Use our existing scraper (compatible with Vercel)
+                  const { html, visibleText } = await scrapeWithPlaywright(searchUrl);
+
+                  // Parse job listings from the page
+                  const extractedData = parseWithCheerio(html, searchUrl);
+
+                  // Use Gemini AI to extract structured job listings
+                  const prompt = `Extract job listings from this ${board.name} search results page.
+
+SEARCH KEYWORD: "${keyword}"
+PAGE TEXT:
+${visibleText.substring(0, 20000)}
+
+Return a JSON array of job objects (maximum ${jobsPerKeyword} jobs). Each job should have:
+{
+  "title": "job title",
+  "company": "company name",
+  "location": "location",
+  "url": "job posting URL (if available)",
+  "description": "brief description or highlights",
+  "salary": "salary info if mentioned",
+  "postedDate": "posted date if mentioned"
+}
+
+IMPORTANT:
+- Return ONLY the JSON array, no explanation
+- Include actual job URLs when available
+- Skip sponsored/featured listings if possible
+- Return empty array [] if no valid jobs found`;
+
+                  const aiResponse = await generateWithFallback(prompt);
+                  let jobListings = [];
+
+                  try {
+                    // Try to parse JSON response
+                    const cleanResponse = aiResponse
+                      .replace(/```json\n?/g, '')
+                      .replace(/```\n?/g, '')
+                      .trim();
+                    jobListings = JSON.parse(cleanResponse);
+                    if (!Array.isArray(jobListings)) {
+                      jobListings = [];
+                    }
+                  } catch (parseError) {
+                    console.log(
+                      `[Job Discovery] Failed to parse AI response for ${keyword} on ${board.name}`
+                    );
+                    jobListings = [];
+                  }
+
+                  // Process each job listing
+                  for (const job of jobListings.slice(0, jobsPerKeyword)) {
+                    if (userJobs.length >= maxJobsPerUser) break;
+
+                    // Create a unique identifier for the job
+                    const jobHash =
+                      `${job.title.toLowerCase().trim()}_${job.company.toLowerCase().trim()}`.replace(
+                        /[^a-z0-9_]/g,
+                        ''
+                      );
+
+                    // Check if this job already exists for this user
+                    const existingJob = await db.collection('discovered_jobs').findOne({
+                      userId: user.id,
+                      jobHash,
+                    });
+
+                    if (!existingJob) {
+                      const discoveredJob = {
+                        id: uuidv4(),
+                        userId: user.id,
+                        jobHash,
+                        title: job.title,
+                        company: job.company,
+                        location: job.location || '',
+                        url: job.url || searchUrl,
+                        description: job.description || '',
+                        salary: job.salary || '',
+                        postedDate: job.postedDate || '',
+                        source: board.name,
+                        searchKeyword: keyword,
+                        discoveredAt: new Date(),
+                        notified: false,
+                      };
+
+                      await db.collection('discovered_jobs').insertOne(discoveredJob);
+                      userJobs.push(discoveredJob);
+                      summary.totalJobsSaved++;
+                    }
+                  }
+
+                  // Increased delay to avoid rate limiting
+                  await new Promise((resolve) => setTimeout(resolve, 4000));
+                } catch (boardError) {
+                  console.error(
+                    `[Job Discovery] Error searching ${board.name} for "${keyword}":`,
+                    boardError.message
+                  );
+                  summary.errors.push({
+                    user: user.email,
+                    keyword,
+                    board: board.name,
+                    error: boardError.message,
+                  });
+                  // Wait on error too
+                  await new Promise((resolve) => setTimeout(resolve, 3000));
+                }
+              }
+            }
+
+            summary.totalJobsDiscovered += userJobs.length;
+
+            // Send email notification if jobs were found
+            if (userJobs.length > 0) {
+              try {
+                const userName = user.name || 'there';
+                const subject = `🎯 ${userJobs.length} New Job Opportunities for You`;
+
+                // Build job listings HTML
+                const jobListingsHtml = userJobs
+                  .map(
+                    (job) => `
+                  <div style="border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 12px;">
+                    <h3 style="margin: 0 0 8px 0; color: #1f2937;">
+                      <a href="${job.url}" style="color: #2563eb; text-decoration: none;">${job.title}</a>
+                    </h3>
+                    <p style="margin: 4px 0; color: #6b7280;">
+                      <strong>${job.company}</strong> ${job.location ? `• ${job.location}` : ''}
+                    </p>
+                    ${job.salary ? `<p style="margin: 4px 0; color: #059669; font-weight: 500;">${job.salary}</p>` : ''}
+                    ${job.description ? `<p style="margin: 8px 0 0 0; color: #4b5563; font-size: 14px;">${job.description.substring(0, 200)}...</p>` : ''}
+                    <p style="margin: 8px 0 0 0; font-size: 12px; color: #9ca3af;">
+                      Source: ${job.source} • Keyword: "${job.searchKeyword}"
+                    </p>
+                  </div>
+                `
+                  )
+                  .join('');
+
+                const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+
+                const text = `Hi ${userName},\n\nWe found ${userJobs.length} new job opportunities matching your search criteria!\n\nView all opportunities: ${appUrl}/dashboard\n\n---\nJob Application Tracker\nDaily Job Discovery Service`;
+
+                const html = `
+                  <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                    <h2 style="color: #2563eb;">🎯 ${userJobs.length} New Job Opportunities</h2>
+                    <p>Hi ${userName},</p>
+                    <p>Great news! We've discovered ${userJobs.length} new job opportunities matching your search criteria:</p>
+                    
+                    <div style="margin: 20px 0;">
+                      ${jobListingsHtml}
+                    </div>
+                    
+                    <div style="text-align: center; margin: 30px 0;">
+                      <a href="${appUrl}/dashboard" style="background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">
+                        View All in Dashboard
+                      </a>
+                    </div>
+                    
+                    <hr style="margin: 30px 0; border: none; border-top: 1px solid #e5e7eb;" />
+                    <p style="font-size: 12px; color: #6b7280;">
+                      Job Application Tracker - Daily Job Discovery<br />
+                      <a href="${appUrl}/profile/job-search" style="color: #2563eb;">Manage your job search preferences</a>
+                    </p>
+                  </div>
+                `;
+
+                await sendEmail(user.email, subject, text, html);
+
+                // Mark jobs as notified
+                await db
+                  .collection('discovered_jobs')
+                  .updateMany(
+                    { userId: user.id, notified: false },
+                    { $set: { notified: true, notifiedAt: new Date() } }
+                  );
+
+                summary.emailsSent++;
+                console.log(
+                  `[Job Discovery] Sent email to ${user.email} with ${userJobs.length} jobs`
+                );
+              } catch (emailError) {
+                console.error(
+                  `[Job Discovery] Failed to send email to ${user.email}:`,
+                  emailError.message
+                );
+                summary.errors.push({
+                  user: user.email,
+                  type: 'email',
+                  error: emailError.message,
+                });
+              }
+            }
+
+            summary.usersProcessed++;
+          } catch (userError) {
+            console.error(
+              `[Job Discovery] Error processing user ${user.email}:`,
+              userError.message
+            );
+            summary.errors.push({
+              user: user.email,
+              type: 'processing',
+              error: userError.message,
+            });
+          }
+
+          // Delay between users to avoid rate limits
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
+
+        console.log('[Job Discovery] Completed:', summary);
+
+        return handleCORS(
+          NextResponse.json({
+            success: true,
+            summary,
+          })
+        );
+      } catch (error) {
+        console.error('[Job Discovery] Error:', error);
+        return handleCORS(
+          NextResponse.json({ error: 'Failed to discover jobs: ' + error.message }, { status: 500 })
+        );
+      }
+    }
+
+    // Manual job discovery for current user (limit 20 jobs)
+    if (route === '/jobs/discover-now' && method === 'POST') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+      const aiDenied = requireAIAccess(user);
+      if (aiDenied) return aiDenied;
+
+      try {
+        console.log(`[Job Discovery Now] Starting manual discovery for user ${user.email}`);
+
+        // Check if user has keywords configured (check both flat and nested structure)
+        const keywords = user.jobSearchKeywords || user.profile?.jobSearchKeywords || [];
+
+        console.log(`[Job Discovery Now] User keywords:`, keywords);
+
+        if (!keywords || keywords.length === 0) {
+          return handleCORS(
+            NextResponse.json(
+              {
+                error:
+                  'No job search keywords configured. Please add keywords in your profile settings.',
+              },
+              { status: 400 }
+            )
+          );
+        }
+
+        const jobBoards = [
+          { name: 'Indeed', url: 'https://uk.indeed.com/jobs?q=' },
+          { name: 'Jobs.ac.uk', url: 'https://www.jobs.ac.uk/search/?keywords=' },
+          // Reduced to 2 boards to avoid rate limits - LinkedIn requires auth anyway
+        ];
+
+        const discoveredJobs = [];
+        const maxJobs = 20;
+        const errors = [];
+        const userKeywords = keywords.slice(0, 2); // Limit to first 2 keywords to reduce API calls
+
+        for (const keyword of userKeywords) {
+          if (discoveredJobs.length >= maxJobs) break;
+
+          for (const board of jobBoards) {
+            if (discoveredJobs.length >= maxJobs) break;
+
+            try {
+              console.log(`[Discovery] Searching ${board.name} for "${keyword}"`);
+
+              const searchUrl = board.url + encodeURIComponent(keyword);
+              const { html, visibleText } = await scrapeWithPlaywright(searchUrl);
+              const extractedData = parseWithCheerio(html, searchUrl);
+
+              const prompt = `Extract job listings from this ${board.name} search results page.
+
+SEARCH KEYWORD: "${keyword}"
+PAGE TEXT:
+${visibleText.substring(0, 15000)}
+
+Return a JSON array of job objects (maximum 10 jobs). Each job should have:
+{
+  "title": "job title",
+  "company": "company name",
+  "location": "location",
+  "url": "job posting URL (if available)",
+  "description": "brief description",
+  "salary": "salary if mentioned"
+}
+
+IMPORTANT: Return ONLY the JSON array, no explanation.`;
+
+              const aiResponse = await generateWithFallback(prompt);
+              let jobListings = [];
+
+              try {
+                const cleanResponse = aiResponse
+                  .replace(/```json\n?/g, '')
+                  .replace(/```\n?/g, '')
+                  .trim();
+                jobListings = JSON.parse(cleanResponse);
+                if (!Array.isArray(jobListings)) jobListings = [];
+              } catch (parseError) {
+                console.log(
+                  `[Discovery] Failed to parse AI response for ${keyword} on ${board.name}`
+                );
+                jobListings = [];
+              }
+
+              for (const job of jobListings) {
+                if (discoveredJobs.length >= maxJobs) break;
+
+                const jobHash =
+                  `${job.title.toLowerCase().trim()}_${job.company.toLowerCase().trim()}`.replace(
+                    /[^a-z0-9_]/g,
+                    ''
+                  );
+
+                const existingJob = await db.collection('discovered_jobs').findOne({
+                  userId: user.id,
+                  jobHash,
+                });
+
+                if (!existingJob) {
+                  const discoveredJob = {
+                    id: uuidv4(),
+                    userId: user.id,
+                    jobHash,
+                    title: job.title,
+                    company: job.company,
+                    location: job.location || '',
+                    url: job.url || searchUrl,
+                    description: job.description || '',
+                    salary: job.salary || '',
+                    source: board.name,
+                    searchKeyword: keyword,
+                    discoveredAt: new Date(),
+                    notified: true, // Manual discovery doesn't send email
+                  };
+
+                  await db.collection('discovered_jobs').insertOne(discoveredJob);
+                  discoveredJobs.push(discoveredJob);
+                }
+              }
+
+              // Increased delay to avoid rate limits (5 seconds between board searches)
+              await new Promise((resolve) => setTimeout(resolve, 5000));
+            } catch (boardError) {
+              console.error(`[Discovery] Error searching ${board.name}:`, boardError.message);
+              errors.push({
+                keyword,
+                board: board.name,
+                error: boardError.message,
+              });
+              // Still wait on error to avoid rapid subsequent requests
+              await new Promise((resolve) => setTimeout(resolve, 3000));
+            }
+          }
+
+          // Add delay between keywords to further reduce rate limit issues
+          if (discoveredJobs.length < maxJobs) {
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+          }
+        }
+
+        console.log(`[Discovery] Completed: found ${discoveredJobs.length} new jobs`);
+
+        return handleCORS(
+          NextResponse.json({
+            success: true,
+            jobsFound: discoveredJobs.length,
+            jobs: discoveredJobs.map(({ _id, ...rest }) => rest),
+            errors: errors.length > 0 ? errors : undefined,
+          })
+        );
+      } catch (error) {
+        console.error('[Job Discovery Now] Error:', error);
+        return handleCORS(
+          NextResponse.json({ error: 'Failed to discover jobs: ' + error.message }, { status: 500 })
+        );
+      }
+    }
+
+    // Get discovered jobs for authenticated user
+    if (route === '/jobs/discovered' && method === 'GET') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const url = new URL(request.url);
+      const limit = parseInt(url.searchParams.get('limit') || '50');
+
+      const jobs = await db
+        .collection('discovered_jobs')
+        .find({ userId: user.id })
+        .sort({ discoveredAt: -1 })
+        .limit(limit)
+        .toArray();
+
+      const cleanJobs = jobs.map(({ _id, ...rest }) => rest);
+      return handleCORS(NextResponse.json({ jobs: cleanJobs }));
+    }
+
+    // Delete a discovered job (supports both path param and query param)
+    if (route === '/jobs/discovered' && method === 'DELETE') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const url = new URL(request.url);
+      const jobId = url.searchParams.get('id');
+
+      if (!jobId) {
+        return handleCORS(NextResponse.json({ error: 'Job ID is required' }, { status: 400 }));
+      }
+
+      const result = await db
+        .collection('discovered_jobs')
+        .deleteOne({ id: jobId, userId: user.id });
+
+      if (result.deletedCount === 0) {
+        return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }));
+      }
+
+      return handleCORS(NextResponse.json({ message: 'Job deleted' }));
+    }
+
+    // Delete a discovered job (path parameter style)
+    if (route.match(/^\/jobs\/discovered\/[^/]+$/) && method === 'DELETE') {
+      const user = await getAuthUser(request);
+      if (!user) {
+        return handleCORS(NextResponse.json({ error: 'Unauthorized' }, { status: 401 }));
+      }
+
+      const jobId = path[2];
+      const result = await db
+        .collection('discovered_jobs')
+        .deleteOne({ id: jobId, userId: user.id });
+
+      if (result.deletedCount === 0) {
+        return handleCORS(NextResponse.json({ error: 'Job not found' }, { status: 404 }));
+      }
+
+      return handleCORS(NextResponse.json({ message: 'Job deleted' }));
     }
 
     // ============ DOCUMENT ROUTES ============

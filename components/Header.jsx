@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import Image from 'next/image';
-import { User, LogOut, ChevronDown, Home, Files, MessagesSquare } from 'lucide-react';
+import { User, LogOut, ChevronDown, Home, Files, MessagesSquare, Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -18,6 +18,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: Home },
   { name: 'Documents', href: '/document', icon: Files },
+  { name: 'Discovered Jobs', href: '/discovered', icon: Compass },
 ];
 
 export function Header({ user, onLogout, currentPath = '/' }) {

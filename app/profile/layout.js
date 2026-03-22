@@ -21,6 +21,7 @@ const navigation = [
   { name: 'Qualifications', href: '/profile/education', icon: GraduationCap },
   { name: 'Skills', href: '/profile/skills', icon: Code },
   { name: 'Projects', href: '/profile/projects', icon: FolderOpen },
+  { name: 'Job Search', href: '/profile/job-search', icon: RefreshCw },
   { name: 'Account Settings', href: '/profile/settings', icon: Settings, destructive: true },
 ];
 

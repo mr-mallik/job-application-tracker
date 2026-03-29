@@ -971,13 +971,17 @@ function buildLinksFromProfile(profile) {
     const url = profile.linkedin.startsWith('http')
       ? profile.linkedin
       : `https://${profile.linkedin}`;
-    links.push({ label: 'LinkedIn', url });
+    // Extract readable part: linkedin.com/in/username or full path
+    const label = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    links.push({ label, url });
   }
   if (profile.portfolio) {
     const url = profile.portfolio.startsWith('http')
       ? profile.portfolio
       : `https://${profile.portfolio}`;
-    links.push({ label: 'Portfolio', url });
+    // Extract domain/path without protocol
+    const label = url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+    links.push({ label, url });
   }
   return links;
 }

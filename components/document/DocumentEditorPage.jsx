@@ -476,7 +476,7 @@ export default function DocumentEditorPage({ documentId }) {
               jobId={doc?.jobId || null}
               selectedBlockId={selectedBlockId}
               onSelectionChange={setSelectedBlockId}
-              userProfile={user ? { name: user.name, ...user.profile } : null}
+              userProfile={user ? { name: user.name, email: user.email, ...user.profile } : null}
               styleOverrides={styleOverrides}
             />
           </div>

@@ -30,7 +30,7 @@ function getBoldFont(fontFamily) {
 // Cover Letter / Supporting Statement Template
 function makeStyles({
   accentColor = '#1F2937',
-  pagePadding = 60,
+  pagePadding = 30,
   baseFontSize = 11,
   fontFamily = 'Helvetica',
 } = {}) {

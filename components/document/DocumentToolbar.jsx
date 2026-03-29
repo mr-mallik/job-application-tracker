@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -66,6 +66,7 @@ export default function DocumentToolbar({
   aiRefineSlot,
   styleOverrides = {},
 }) {
+  const router = useRouter();
   const [confirmFetchOpen, setConfirmFetchOpen] = useState(false);
 
   const TemplateComponent = TEMPLATE_MAP[template] || ATSResumeTemplate;
@@ -105,10 +106,14 @@ export default function DocumentToolbar({
     <>
       <div className="flex items-center gap-2 px-4 py-2 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-10">
         {/* Back */}
-        <Button variant="ghost" size="icon" className="shrink-0 h-8 w-8" asChild>
-          <Link href="/document">
-            <ArrowLeft className="w-4 h-4" />
-          </Link>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="shrink-0 h-8 w-8"
+          onClick={() => router.back()}
+          title="Go back"
+        >
+          <ArrowLeft className="w-4 h-4" />
         </Button>
 
         <div className="w-px h-5 bg-border mx-1" />

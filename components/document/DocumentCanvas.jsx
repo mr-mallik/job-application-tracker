@@ -114,7 +114,8 @@ const PAGE_STYLES = {
   name: 'text-2xl font-bold uppercase tracking-wide text-center',
   designation: 'text-sm text-gray-500 text-center mt-1',
   contactRow: 'flex flex-wrap justify-center gap-x-3 mt-1.5 text-xs text-gray-500',
-  sectionTitle: 'text-sm font-bold uppercase tracking-wider border-b border-gray-300 pb-1 mt-1',
+  sectionTitle:
+    'text-sm font-bold uppercase tracking-wider border-b border-gray-300 pb-1 mt-1 break-words',
   subheadingPrimary: 'text-sm font-semibold',
   subheadingMeta: 'text-xs text-gray-500',
   text: 'text-sm text-gray-700 leading-relaxed',
@@ -620,7 +621,7 @@ function MeasureBlockRenderer({ block, accentColor }) {
     case BLOCK_TYPES.SECTION_TITLE:
       return (
         <div
-          className={cn(PAGE_STYLES.sectionTitle, 'uppercase mt-1')}
+          className={cn(PAGE_STYLES.sectionTitle, 'uppercase mt-1 break-words')}
           style={{ color: accentColor, borderColor: accentColor + '50' }}
         >
           {block.data.title || 'SECTION'}
@@ -758,7 +759,7 @@ function BlockRenderer({ block, onChange, jobId, isDragMode, accentColor }) {
     // SECTION_TITLE used by the measurement container only
     case BLOCK_TYPES.SECTION_TITLE:
       return (
-        <div className={cn(PAGE_STYLES.sectionTitle, 'uppercase')}>
+        <div className={cn(PAGE_STYLES.sectionTitle, 'uppercase break-words')}>
           {block.data.title || 'SECTION'}
         </div>
       );
@@ -890,7 +891,7 @@ function PageBlocks({
                   onSelectBlock(block.id);
                 }}
               >
-                <input
+                <textarea
                   value={block.data.title || ''}
                   onChange={(e) => onSectionTitleChange(block.id, e.target.value)}
                   onClick={(e) => {
@@ -900,12 +901,25 @@ function PageBlocks({
                   }}
                   placeholder="SECTION TITLE"
                   disabled={isDragMode}
+                  rows={1}
                   className={cn(
                     PAGE_STYLES.sectionTitle,
-                    'w-full bg-transparent outline-none border-0 border-b border-gray-300 focus:border-primary py-0.5 transition-colors uppercase placeholder:text-gray-300',
+                    'w-full bg-transparent outline-none border-0 border-b border-gray-300 focus:border-primary py-0.5 transition-colors uppercase placeholder:text-gray-300 resize-none overflow-hidden break-words',
                     isDragMode && 'cursor-move pointer-events-none'
                   )}
                   style={{ color: accentColor, borderColor: accentColor + '50' }}
+                  ref={(el) => {
+                    // Auto-resize on mount and when content changes
+                    if (el) {
+                      el.style.height = 'auto';
+                      el.style.height = el.scrollHeight + 'px';
+                    }
+                  }}
+                  onInput={(e) => {
+                    // Auto-resize textarea to fit content
+                    e.target.style.height = 'auto';
+                    e.target.style.height = e.target.scrollHeight + 'px';
+                  }}
                 />
               </div>
             </SortableBlockItem>

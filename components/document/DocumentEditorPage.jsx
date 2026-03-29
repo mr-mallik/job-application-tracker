@@ -424,6 +424,7 @@ export default function DocumentEditorPage({ documentId }) {
           onFetchFromProfile={documentType === 'resume' ? handleFetchFromProfile : undefined}
           onDeleteClick={() => setDeleteOpen(true)}
           styleOverrides={styleOverrides}
+          jobId={doc?.jobId || null}
           aiRefineSlot={
             <AIRefineDialog
               documentType={documentType}

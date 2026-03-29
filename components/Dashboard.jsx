@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -34,6 +35,7 @@ import { JobDetailsPanel } from './JobDetailsPanel';
 import { formatDateShort, isPastDate } from '@/lib/dateUtils';
 
 export function Dashboard({ user, token, onLogout, onUserUpdate }) {
+  const searchParams = useSearchParams();
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState(null);
@@ -66,6 +68,17 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
   useEffect(() => {
     loadJobs();
   }, []);
+
+  // Handle jobId URL parameter to auto-select job (only on mount or when jobId changes)
+  useEffect(() => {
+    const jobId = searchParams?.get('jobId');
+    if (jobId && jobs.length > 0) {
+      const job = jobs.find((j) => j.id === jobId);
+      if (job && (!selectedJob || selectedJob.id !== jobId)) {
+        setSelectedJob(job);
+      }
+    }
+  }, [searchParams, jobs]);
 
   const loadJobs = async () => {
     try {

@@ -65,6 +65,7 @@ export default function DocumentToolbar({
   onDeleteClick,
   aiRefineSlot,
   styleOverrides = {},
+  jobId = null,
 }) {
   const router = useRouter();
   const [confirmFetchOpen, setConfirmFetchOpen] = useState(false);
@@ -110,7 +111,14 @@ export default function DocumentToolbar({
           variant="ghost"
           size="icon"
           className="shrink-0 h-8 w-8"
-          onClick={() => router.back()}
+          onClick={() => {
+            // If document is linked to a job, navigate back with jobId to keep panel open
+            if (jobId) {
+              router.push(`/dashboard?jobId=${jobId}`);
+            } else {
+              router.back();
+            }
+          }}
           title="Go back"
         >
           <ArrowLeft className="w-4 h-4" />

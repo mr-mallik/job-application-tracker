@@ -33,6 +33,7 @@ import { statusColors } from './constants';
 import { JobForm } from './JobForm';
 import { JobDetailsPanel } from './JobDetailsPanel';
 import { formatDateShort, isPastDate } from '@/lib/dateUtils';
+import { useConfirm } from './dialog-confirm';
 
 export function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const searchParams = useSearchParams();
@@ -41,6 +42,7 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
   const [selectedJob, setSelectedJob] = useState(null);
   const [showAddJob, setShowAddJob] = useState(false);
   const [filter, setFilter] = useState('saved'); // default to 'saved' applications
+  const { confirm, ConfirmDialog } = useConfirm();
 
   // Merge user root fields with profile for backward compatibility
   // Handle both flat structure (fields at root) and nested structure (user.profile.*)
@@ -93,7 +95,15 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
   };
 
   const handleDeleteJob = async (id) => {
-    if (!confirm('Are you sure you want to delete this job?')) return;
+    const confirmed = await confirm({
+      title: 'Delete job application?',
+      description:
+        'This action cannot be undone. All associated documents will remain but will no longer be linked to this job.',
+      confirmText: 'Delete',
+      destructive: true,
+    });
+    if (!confirmed) return;
+
     try {
       await fetch(`/api/jobs/${id}`, {
         method: 'DELETE',
@@ -348,6 +358,9 @@ export function Dashboard({ user, token, onLogout, onUserUpdate }) {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Confirmation Dialog */}
+      <ConfirmDialog />
     </div>
   );
 }

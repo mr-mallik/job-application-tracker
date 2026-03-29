@@ -38,7 +38,7 @@ export function ExperienceEntry({ experience, index, onChange, onRemove }) {
                 placeholder="e.g., Software Engineer"
                 className="pl-10"
                 value={experience.title || ''}
-                onChange={(e) => onChange('title', e.target.value)}
+                onChange={(e) => onChange({ ...experience, title: e.target.value })}
               />
             </div>
           </div>
@@ -51,7 +51,7 @@ export function ExperienceEntry({ experience, index, onChange, onRemove }) {
                 placeholder="e.g., Tech Corp Inc."
                 className="pl-10"
                 value={experience.company || ''}
-                onChange={(e) => onChange('company', e.target.value)}
+                onChange={(e) => onChange({ ...experience, company: e.target.value })}
               />
             </div>
           </div>
@@ -64,7 +64,7 @@ export function ExperienceEntry({ experience, index, onChange, onRemove }) {
                 placeholder="e.g., San Francisco, CA"
                 className="pl-10"
                 value={experience.location || ''}
-                onChange={(e) => onChange('location', e.target.value)}
+                onChange={(e) => onChange({ ...experience, location: e.target.value })}
               />
             </div>
           </div>
@@ -78,7 +78,7 @@ export function ExperienceEntry({ experience, index, onChange, onRemove }) {
                   placeholder="mm/yyyy"
                   className="pl-10"
                   value={experience.startDate || ''}
-                  onChange={(e) => onChange('startDate', e.target.value)}
+                  onChange={(e) => onChange({ ...experience, startDate: e.target.value })}
                 />
               </div>
               <span className="flex items-center text-muted-foreground">-</span>
@@ -86,7 +86,7 @@ export function ExperienceEntry({ experience, index, onChange, onRemove }) {
                 placeholder="mm/yyyy or Present"
                 className="flex-1"
                 value={experience.endDate || ''}
-                onChange={(e) => onChange('endDate', e.target.value)}
+                onChange={(e) => onChange({ ...experience, endDate: e.target.value })}
               />
             </div>
           </div>
@@ -98,7 +98,7 @@ export function ExperienceEntry({ experience, index, onChange, onRemove }) {
             placeholder="• Led development of...&#10;• Implemented features that...&#10;• Collaborated with team to...&#10;&#10;(One bullet point per line)"
             className="min-h-[120px] resize-y font-mono text-xs"
             value={experience.description || ''}
-            onChange={(e) => onChange('description', e.target.value)}
+            onChange={(e) => onChange({ ...experience, description: e.target.value })}
           />
           <p className="text-xs text-muted-foreground">
             Tip: Use action verbs and quantify achievements where possible
